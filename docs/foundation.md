@@ -104,5 +104,7 @@ These are compilation checks, not behavioral or cross-platform acceptance.
 Pending behavioral coverage includes IPv4 rejection boundaries, IPv6 zero-run
 and dotted-tail combinations, scope/port limits, text round trips, empty/null
 byte views and slice overflow, deadline saturation/rounding, and cancellation
-sharing across threads. DNS/TCP/UDP, native pollers, HTTP, TLS/HTTPS and remote
-dependency fetching remain subsequent roadmap stages.
+sharing across threads. DNS/TCP/UDP and native readiness primitives now have a separate N2
+implementation; see [transport.md](transport.md) for its compile evidence and
+remaining runtime/platform acceptance. Async event loops, HTTP, TLS/HTTPS and
+remote dependency fetching remain subsequent roadmap stages.

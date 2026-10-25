@@ -140,6 +140,8 @@ pub struct NetCancellation;
 pub static method(NetCancellation) New() -> NetCancellation;
 /** @brief Allocation-free token that cannot be cancelled; also the default value. */
 pub static method(NetCancellation) None() -> NetCancellation;
+/** @brief Whether this token owns a cancellation cell (even before it is cancelled). */
+pub method(NetCancellation) CanBeCancelled() -> bool;
 /** @brief Publish cancellation with release ordering; None is a no-op. */
 pub method(NetCancellation) Cancel() -> void;
 /** @brief Observe cancellation with acquire ordering; None returns false. */

@@ -22,15 +22,21 @@ See [foundation.md](docs/foundation.md) for the implemented contract and evidenc
 
 ## N2 — DNS and socket substrate
 
-- [ ] Private OS adapters for macOS, Linux and Windows; no HTTP/TLS library wrapper.
-- [ ] Capture errno/WinSock/resolver errors before cleanup; map once at the boundary.
-- [ ] Address/sockaddr conversion, interface-name lookup and DNS/address resolution.
-- [ ] Move-only owning TCP connection/listener and UDP socket values, drop cleanup,
-      idempotent Close, partial I/O, EOF and datagram truncation semantics.
-- [ ] Nonblocking sockets, interrupted calls and finite wait budgets; no SIGPIPE
-      termination, descriptor inheritance or unchecked native length narrowing.
-- [ ] Native library packaging and ordinary linker arguments; no compiler package
-      name special case. Document SDK/cross-target link requirements.
+Implementation complete; macOS native semantic checking, Core/O2 precompilation,
+C compilation and adapter symbol inventory pass. Runtime and other-host
+acceptance are pending. See [transport.md](docs/transport.md).
+
+- [x] Private BSD sockets/WinSock adapter sources; no HTTP/TLS library wrapper.
+- [x] Capture native errors before cleanup; map once at the boundary.
+- [x] sockaddr conversion, numeric/interface scopes and bounded-result synchronous DNS.
+- [x] Move-only TCP connection/listener and UDP owners, close on drop/idempotent Close,
+      partial I/O, EOF and explicit datagram truncation failures.
+- [x] Nonblocking primitives, absolute socket deadlines and cooperative cancellation;
+      SIGPIPE suppression and descriptor/length validation.
+- [x] Independent native library builder, MIT notices and ordinary linker arguments.
+- [ ] Behavioral resource/I/O/deadline/cancellation coverage and real network acceptance.
+- [ ] Linux/Windows native compilation and runtime acceptance.
+- [ ] Cross-target SDK artifact integration/acceptance with matching sysroot/CRT.
 
 ## N3 — Asynchronous transport
 

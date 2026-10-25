@@ -5,3 +5,6 @@
 export "interface/foundation.ni";
 import "interface/foundation.ni";
 import "private/foundation.ny";
+export "interface/transport.ni";
+import "interface/transport.ni";
+import "private/transport.ny";

@@ -11,6 +11,8 @@ pub static method(NetCancellation) New() -> NetCancellation {
 }
 /** @brief No allocation and no cancellation ability. */
 pub static method(NetCancellation) None() -> NetCancellation { return NetCancellation{}; }
+/** @brief Whether the token has a shared cancellation cell. */
+pub method(NetCancellation) CanBeCancelled() -> bool { return self.cell != nil; }
 /** @brief Set a sticky flag shared by every copy; None is inert. */
 pub method(NetCancellation) Cancel() -> void {
   let optional: arc<NetCancelCell>? = self.cell;
