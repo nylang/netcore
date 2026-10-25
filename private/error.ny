@@ -21,7 +21,8 @@ pub method(NetError) Message() -> string {
   if self.kind == NetErrorKind.TimedOut { return "network deadline expired"; }
   if self.kind == NetErrorKind.Cancelled { return "network operation cancelled"; }
   if self.kind == NetErrorKind.Closed { return "socket is closed"; }
-  if self.kind == NetErrorKind.MessageTooLarge { return "datagram too large"; }
+  if self.kind == NetErrorKind.MessageTooLarge { return "network message or buffer too large"; }
   if self.kind == NetErrorKind.NotSupported { return "network operation not supported"; }
+  if self.kind == NetErrorKind.UnexpectedEof { return "unexpected end of stream"; }
   return "network system error";
 }

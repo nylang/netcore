@@ -53,3 +53,28 @@ pub method(UdpSocket) LocalEndpoint()->Result<NetEndpoint,NetError>{return net_s
 pub method(UdpSocket) IsOpen()->bool{return self.socket_value.live;}
 /** @brief Close exactly once. */
 pub method(UdpSocket) Close()->Result<Unit,NetError>{return self.socket_value.Close();}
+
+/** @brief Send one datagram without waiting for send-buffer space. */
+pub method(UdpSocket) TrySendTo(endpoint:ref NetEndpoint,buffer:ref NetBytes)->Result<intptr,NetError> {
+  if !self.socket_value.live{return NetError{kind:NetErrorKind.Closed};}
+  let ip:IpAddress=endpoint.Address();
+  if ip.Family()==IpFamily.Unspecified{return NetError{kind:NetErrorKind.InvalidAddress};}
+  let address:NetNativeAddress=net_native_address(endpoint);
+  var count:intptr=0 as intptr;
+  var error:NetNativeError=NetNativeError{};
+  if net_core_os_send_to(self.socket_value.handle,&address,buffer.Data(),buffer.Len(),&mut count,&mut error)!=0 {
+    return net_native_error(error);
+  }
+  return count;
+}
+/** @brief Receive one datagram without waiting; preserve the truncation contract. */
+pub method(UdpSocket) TryReceiveFrom(buffer:ref NetMutableBytes)->Result<NetDatagram,NetError> {
+  if !self.socket_value.live{return NetError{kind:NetErrorKind.Closed};}
+  var count:intptr=0 as intptr;
+  var sender:NetNativeAddress=NetNativeAddress{};
+  var error:NetNativeError=NetNativeError{};
+  if net_core_os_receive_from(self.socket_value.handle,buffer.Data(),buffer.Len(),&mut count,&mut sender,&mut error)!=0 {
+    return net_native_error(error);
+  }
+  return NetDatagram{bytes_read:count,sender:net_product_endpoint(sender)};
+}

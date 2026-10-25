@@ -117,3 +117,34 @@ pub method(TcpListener) LocalEndpoint()->Result<NetEndpoint,NetError>{return net
 pub method(TcpListener) IsOpen()->bool{return self.socket_value.live;}
 /** @brief Explicitly close once; drop after this is inert. */
 pub method(TcpListener) Close()->Result<Unit,NetError>{return self.socket_value.Close();}
+
+/** @brief Perform one nonblocking read; never wait after stale readiness. */
+pub method(TcpConnection) TryRead(buffer:ref NetMutableBytes)->Result<intptr,NetError> {
+  if !self.socket_value.live{return NetError{kind:NetErrorKind.Closed};}
+  var count:intptr=0 as intptr;
+  var error:NetNativeError=NetNativeError{};
+  if net_core_os_read(self.socket_value.handle,buffer.Data(),buffer.Len(),&mut count,&mut error)!=0 {
+    return net_native_error(error);
+  }
+  return count;
+}
+/** @brief Perform one nonblocking write; accepted bytes are never replayed. */
+pub method(TcpConnection) TryWrite(buffer:ref NetBytes)->Result<intptr,NetError> {
+  if !self.socket_value.live{return NetError{kind:NetErrorKind.Closed};}
+  var count:intptr=0 as intptr;
+  var error:NetNativeError=NetNativeError{};
+  if net_core_os_write(self.socket_value.handle,buffer.Data(),buffer.Len(),&mut count,&mut error)!=0 {
+    return net_native_error(error);
+  }
+  return count;
+}
+/** @brief Accept once without waiting, preserving the sole-owner construction path. */
+pub method(TcpListener) TryAccept()->Result<TcpConnection,NetError> {
+  if !self.socket_value.live{return NetError{kind:NetErrorKind.Closed};}
+  var handle:intptr=0 as intptr;
+  var error:NetNativeError=NetNativeError{};
+  if net_core_os_accept(self.socket_value.handle,&mut handle,&mut error)!=0 {
+    return net_native_error(error);
+  }
+  return TcpConnection{socket_value:NetSocketState{handle:handle,live:true}};
+}

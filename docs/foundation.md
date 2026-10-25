@@ -4,12 +4,14 @@
 
 The first implementation supplies address/endpoint values, error categories,
 borrowed byte ranges, deadlines and shared cancellation. It depends only on the
-public `stdlib:stdlib.ny` barrel. There are no socket system calls, HTTP parsers,
-TLS bindings or compiler dependencies in this stage.
+public `stdlib:stdlib.ny` barrel. Address/byte/deadline values have no socket
+system calls. The later hosted cancellation extension owns private native wake
+resources; HTTP/TLS and compiler dependencies are absent.
 
 `net_core.ny` exports `interface/foundation.ni`; closed bodies belong to the
 `NetFoundation` module in `private/foundation.ny` with explicitly listed parts.
-One module remains one TU. Future OS adapters stay private in this repository.
+Hosted cancellation now belongs to NetTransport alongside its private native
+wake adapter. One module remains one TU. OS adapters stay private.
 The compiler frontend and CodeGen do not gain networking package special cases.
 
 ## Address rules
@@ -71,12 +73,11 @@ loops must recompute remaining time after interruption or spurious readiness;
 reusing the original duration would extend the overall operation deadline.
 
 `NetCancellation.New()` allocates one ARC-owned atomic cell. Value copies share
-it. Cancellation is sticky: Cancel stores with release ordering and IsCancelled
-loads with acquire ordering. None/default allocates nothing and is inert.
-There is no reset, callback registration or OS-wait wakeup in this stage. An
-operation can only observe cancellation when it polls the flag. Native event
-integration must add an actual wake mechanism before claiming prompt cancellation
-of blocked socket operations.
+it. Cancellation is sticky: Cancel publishes with an acquire/release exchange;
+IsCancelled loads with acquire ordering. None/default allocates nothing and is inert.
+There is no reset or callback registration. New remains flag-only.
+NewWakeable is a fallible macOS factory for an ARC-owned OS wake channel;
+its lifetime and race contracts are documented in [events.md](events.md).
 
 `NetOperationOptions.Check(now_ns)` gives cancellation precedence over timeout
 when both conditions are visible at that observation. Success carries Unit.
@@ -106,5 +107,6 @@ and dotted-tail combinations, scope/port limits, text round trips, empty/null
 byte views and slice overflow, deadline saturation/rounding, and cancellation
 sharing across threads. DNS/TCP/UDP and native readiness primitives now have a separate N2
 implementation; see [transport.md](transport.md) for its compile evidence and
-remaining runtime/platform acceptance. Async event loops, HTTP, TLS/HTTPS and
-remote dependency fetching remain subsequent roadmap stages.
+remaining runtime/platform acceptance. The macOS readiness/Future increment is described in [events.md](events.md).
+High-level async transfers, HTTP, TLS/HTTPS and remote dependency fetching remain
+subsequent roadmap work.

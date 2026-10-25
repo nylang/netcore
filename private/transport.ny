@@ -1,10 +1,22 @@
 /** @brief Resource-owning network facade; native functions implement only OS primitives. */
 module NetTransport;
 part "native_bridge.ny";
+part "cancellation.ny";
+part "event_loop.ny";
+part "owned_buffer.ny";
+part "async_transfer.ny";
+part "async_connection.ny";
 part "socket_owner.ny";
 part "resolver.ny";
+part "async_resolver.ny";
 part "tcp.ny";
 part "udp.ny";
+part "../tests/n3_selftest.ny";
+part "../tests/n3_transport_selftest.ny";
+part "../tests/n3_resolver_selftest.ny";
 import "stdlib:stdlib.ny";
+import "ntest:ntest.ny";
 import "interface/foundation.ni";
 import "interface/transport.ni";
+import "interface/async_transport.ni";
+import "interface/async_resolver.ni";

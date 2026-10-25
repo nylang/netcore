@@ -4,6 +4,9 @@ license: MIT
 dependencies:
   stdlib:
     path: ../../source/stdlib
+dev-dependencies:
+  ntest:
+    path: ../../source/ntest
 directories:
   interface:
     - interface

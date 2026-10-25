@@ -12,9 +12,20 @@ Independent Nyra networking foundation. The current implementation provides:
 - `Resolver`: bounded-result synchronous OS DNS and numeric interface scopes.
 - `TcpConnection`, `TcpListener`, `UdpSocket`: move-only, drop-managed sockets
   with partial I/O, explicit EOF/datagram semantics and operation controls.
+- macOS `NetEventLoop`: bounded caller-thread readiness Futures, plus nonblocking
+  `Try*` I/O and `NetCancellation.NewWakeable()` for active cancellation wakeup.
+- `NetBuffer` and retained transfer Futures: TCP partial/exact reads and
+  partial/full writes, UDP messages, numeric async connect and accept tasks.
+- Explicit queue/payload limits, progress on failure and take-once connection ownership.
+- `AsyncResolver`: an explicit fixed DNS worker pool with bounded admission,
+  immutable endpoint results and caller-thread Future publication.
+- macOS DNS progress notifications integrate with `NetEventLoop`, including
+  query-deadline budgets and bounded cancellation observation.
 
-The socket substrate compiles on macOS; runtime and Linux/Windows acceptance
-remain pending. Native event loops, HTTP and TLS/HTTPS are planned stages.
+The macOS N3 socket/async/DNS layer passes 37 controlled behavioral cases and
+individual runtime replays. See [acceptance and remaining coverage](tests/README.md).
+Additional fault injection and Linux/Windows event adapters remain open. HTTP
+will live in a separate package; TLS is planned as a separate reusable layer.
 The compiler and package manager will consume public APIs; networking does not
 belong in their frontend or CodeGen.
 No libcurl dependency or compiler-specific API is part of this package.
@@ -41,12 +52,15 @@ func main() -> int32 {
 
 Address parsing does not allocate or retain input strings. Formatting produces
 an owned string. Byte views do not retain their owners and must not outlive the
-backing memory. Cancellation is currently a pollable flag, not an OS wakeup.
+backing memory. New cancellation tokens remain flag-only; NewWakeable returns a
+macOS OS-backed token or an explicit failure.
 
 See [foundation contract and compilation evidence](docs/foundation.md),
 [DNS/socket contracts and native build/link instructions](docs/transport.md), and
-[implementation roadmap](ROADMAP.md). Behavioral and platform acceptance remain
-pending; compilation alone is not network runtime validation.
+[macOS event/Future contracts](docs/events.md),
+[retained asynchronous transport](docs/async-transport.md),
+[bounded asynchronous DNS](docs/async-resolver.md), and [implementation roadmap](ROADMAP.md).
+The acceptance scope and remaining fault/platform cases are listed explicitly.
 
 ## License
 

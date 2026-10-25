@@ -8,3 +8,7 @@ import "private/foundation.ny";
 export "interface/transport.ni";
 import "interface/transport.ni";
 import "private/transport.ny";
+export "interface/async_transport.ni";
+import "interface/async_transport.ni";
+export "interface/async_resolver.ni";
+import "interface/async_resolver.ni";

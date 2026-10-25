@@ -10,7 +10,7 @@ pub enum NetErrorKind {
   NameNotFound, PermissionDenied, AddressInUse, AddressUnavailable,
   ConnectionRefused, ConnectionReset, ConnectionAborted, NotConnected,
   NetworkUnreachable, HostUnreachable, WouldBlock, TimedOut, Cancelled,
-  Closed, MessageTooLarge, NotSupported, System,
+  Closed, MessageTooLarge, NotSupported, System, UnexpectedEof,
 }
 
 /**
@@ -133,11 +133,19 @@ pub method(NetDeadline) PollMilliseconds(now_ns: uint64) -> int32;
 
 /**
  * @brief Shared sticky cancellation flag; copies share an ARC-owned atomic cell.
- * @note No reset or callbacks. Polling the flag does not wake a blocked OS wait.
+ * @note No reset or callbacks. New is flag-only; NewWakeable owns a macOS wake channel.
  */
 pub struct NetCancellation;
 /** @brief Allocate one shared atomic cancellation cell, initially not cancelled. */
 pub static method(NetCancellation) New() -> NetCancellation;
+/**
+ * @brief Allocate a macOS OS-backed token shared by copies; last drop closes its wake channel.
+ * @returns Token, OS resource failure, or NotSupported on other hosts; never silently polls.
+ * @note Cancel wakes all current/future readiness waits without periodic polling.
+ */
+pub static method(NetCancellation) NewWakeable() -> Result<NetCancellation, NetError>;
+/** @brief Whether cancellation can wake native waits; false for New/None tokens. */
+pub method(NetCancellation) CanWakeWaiters() -> bool;
 /** @brief Allocation-free token that cannot be cancelled; also the default value. */
 pub static method(NetCancellation) None() -> NetCancellation;
 /** @brief Whether this token owns a cancellation cell (even before it is cancelled). */

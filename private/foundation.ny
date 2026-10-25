@@ -5,6 +5,5 @@ part "address.ny";
 part "endpoint.ny";
 part "buffer.ny";
 part "deadline.ny";
-part "cancellation.ny";
 import "stdlib:stdlib.ny";
 import "interface/foundation.ni";

@@ -31,6 +31,14 @@ typedef int nc_socklen;
 #include <net/if.h>
 #include <fcntl.h>
 #include <poll.h>
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#if TARGET_OS_OSX
+#define NC_MACOS_EVENTS 1
+#include <sys/event.h>
+#include <sys/time.h>
+#endif
+#endif
 #include <unistd.h>
 #include <errno.h>
 typedef int nc_socket;
@@ -219,6 +227,172 @@ int32_t net_core_os_accept(intptr_t handle,intptr_t *out,nc_error *error) {
   *out=(intptr_t)value;
   return nc_ok(error);
 }
+/* A sticky byte is never consumed: every registered waiter observes readiness,
+ * including one which registers after cancellation. ARC owns both endpoints. */
+int32_t net_core_os_wake_open(intptr_t *read_handle,intptr_t *write_handle,nc_error *error) {
+  *read_handle=-1; *write_handle=-1;
+#ifdef NC_MACOS_EVENTS
+  int pair[2];
+  if (socketpair(AF_UNIX,SOCK_STREAM,0,pair)<0) return nc_system(error,errno);
+  int code=nc_configure(pair[0]);
+  if (!code) code=nc_configure(pair[1]);
+  if (code) { close(pair[0]); close(pair[1]); return nc_system(error,code); }
+  *read_handle=pair[0]; *write_handle=pair[1];
+  return nc_ok(error);
+#else
+  return nc_fail(error,NC_UNSUPPORTED,0);
+#endif
+}
+void net_core_os_wake_close(intptr_t read_handle,intptr_t write_handle) {
+#ifdef NC_MACOS_EVENTS
+  close((int)read_handle); close((int)write_handle);
+#else
+  (void)read_handle; (void)write_handle;
+#endif
+}
+void net_core_os_wake_signal(intptr_t write_handle) {
+#ifdef NC_MACOS_EVENTS
+  const uint8_t byte=1;
+  ssize_t result;
+  do { result=send((int)write_handle,&byte,1,0); } while (result<0 && errno==EINTR);
+  /* One writer wins the atomic transition. Both endpoints remain owned and
+   * configured; EAGAIN already means the channel is readable. No bytes drain. */
+#else
+  (void)write_handle;
+#endif
+}
+int32_t net_core_os_notify_drain(intptr_t read_handle,nc_error *error) {
+#ifdef NC_MACOS_EVENTS
+  uint8_t bytes[256];
+  /* Bound work even under interruption. Remaining bytes simply keep readiness
+   * asserted for a later batch. This must never drain a cancellation channel. */
+  for (int attempt=0;attempt<8;attempt++) {
+    ssize_t count=recv((int)read_handle,bytes,sizeof(bytes),0);
+    if (count>0) continue;
+    if (!count) return nc_fail(error,NC_CLOSED,0);
+    int code=errno;
+    if (code==EINTR) continue;
+    if (code==EAGAIN || code==EWOULDBLOCK) return nc_ok(error);
+    return nc_system(error,code);
+  }
+  return nc_ok(error);
+#else
+  (void)read_handle;
+  return nc_fail(error,NC_UNSUPPORTED,0);
+#endif
+}
+int32_t net_core_os_events_supported(void) {
+#ifdef NC_MACOS_EVENTS
+  return 1;
+#else
+  return 0;
+#endif
+}
+int32_t net_core_os_duplicate(intptr_t handle,intptr_t *out,nc_error *error) {
+  *out=-1;
+#ifdef NC_MACOS_EVENTS
+  int descriptor=fcntl((int)handle,F_DUPFD_CLOEXEC,0);
+  if (descriptor<0) return nc_system(error,errno);
+  *out=descriptor;
+  return nc_ok(error);
+#else
+  (void)handle;
+  return nc_fail(error,NC_UNSUPPORTED,0);
+#endif
+}
+int32_t net_core_os_wait_many(nc_wait_item *items,int32_t count,int32_t milliseconds,nc_error *error) {
+  if (!items || count<1 || count>256 || milliseconds < -1) return nc_fail(error,NC_ARGUMENT,0);
+#ifdef NC_MACOS_EVENTS
+  struct kevent changes[512],events[512];
+  int total=0;
+  for (int32_t i=0;i<count;i++) {
+    if (items[i].ready) continue; /* Already cancelled/expired in the Nyra layer. */
+    EV_SET(&changes[total],(uintptr_t)items[i].handle,items[i].writable ? EVFILT_WRITE : EVFILT_READ,EV_ADD,0,0,NULL);
+    total++;
+    if (items[i].wake_handle<0) continue;
+    int seen=0;
+    for (int32_t j=0;j<i;j++) {
+      if (!items[j].ready && items[j].wake_handle==items[i].wake_handle) { seen=1; break; }
+    }
+    if (!seen) {
+      EV_SET(&changes[total],(uintptr_t)items[i].wake_handle,EVFILT_READ,EV_ADD,0,0,NULL);
+      total++;
+    }
+  }
+  if (!total) return nc_ok(error);
+  int queue=kqueue();
+  if (queue<0) return nc_system(error,errno);
+  int flags=fcntl(queue,F_GETFD,0);
+  if (flags<0 || fcntl(queue,F_SETFD,flags|FD_CLOEXEC)<0) {
+    int code=errno; close(queue); return nc_system(error,code);
+  }
+  struct timespec budget={milliseconds<0 ? 0 : milliseconds/1000,
+                          milliseconds<0 ? 0 : (milliseconds%1000)*1000000L};
+  int ready=kevent(queue,changes,total,events,512,milliseconds<0 ? NULL : &budget);
+  int code=ready<0 ? errno : 0;
+  close(queue);
+  if (code==EINTR) return nc_ok(error); /* Driver recomputes absolute budgets. */
+  if (code) return nc_system(error,code);
+  for (int i=0;i<ready;i++) {
+    for (int32_t j=0;j<count;j++) {
+      nc_wait_item *item=&items[j];
+      int cancelled=item->wake_handle>=0 && events[i].ident==(uintptr_t)item->wake_handle
+                    && events[i].filter==EVFILT_READ;
+      int socket_event=events[i].ident==(uintptr_t)item->handle
+                       && events[i].filter==(item->writable ? EVFILT_WRITE : EVFILT_READ);
+      if (!cancelled && !socket_event) continue;
+      if (item->ready && item->kind!=NC_OK) continue;
+      item->ready=1;
+      if ((events[i].flags&EV_ERROR) && events[i].data) {
+        nc_error mapped;
+        nc_system(&mapped,(int)events[i].data);
+        item->kind=mapped.kind; item->native_code=mapped.native_code;
+      } else if (cancelled) {
+        item->kind=NC_CANCELLED; item->native_code=0;
+      }
+    }
+  }
+  return nc_ok(error);
+#else
+  return nc_fail(error,NC_UNSUPPORTED,0);
+#endif
+}
+int32_t net_core_os_wait_wake(intptr_t handle,int32_t writable,int32_t milliseconds,intptr_t wake_handle,nc_error *error) {
+  if (milliseconds < -1) return nc_fail(error,NC_ARGUMENT,0);
+#ifdef NC_MACOS_EVENTS
+  int queue=kqueue();
+  if (queue<0) return nc_system(error,errno);
+  int flags=fcntl(queue,F_GETFD,0);
+  if (flags<0 || fcntl(queue,F_SETFD,flags|FD_CLOEXEC)<0) {
+    int code=errno; close(queue); return nc_system(error,code);
+  }
+  struct kevent changes[2],events[2];
+  EV_SET(&changes[0],(uintptr_t)handle,writable ? EVFILT_WRITE : EVFILT_READ,EV_ADD,0,0,NULL);
+  int count=1;
+  if (wake_handle>=0) {
+    EV_SET(&changes[1],(uintptr_t)wake_handle,EVFILT_READ,EV_ADD,0,0,NULL);
+    count=2;
+  }
+  struct timespec budget={milliseconds<0 ? 0 : milliseconds/1000,
+                          milliseconds<0 ? 0 : (milliseconds%1000)*1000000L};
+  int ready=kevent(queue,changes,count,events,2,milliseconds<0 ? NULL : &budget);
+  int code=ready<0 ? errno : 0;
+  /* Closing the private queue removes all registrations before returning. No
+   * callback, retained pointer or stale registration can survive fd reuse. */
+  close(queue);
+  if (code) return nc_system(error,code);
+  for (int i=0;i<ready;i++) {
+    if ((events[i].flags&EV_ERROR) && events[i].data) return nc_system(error,(int)events[i].data);
+  }
+  for (int i=0;i<ready;i++) {
+    if (wake_handle>=0 && events[i].ident==(uintptr_t)wake_handle) return nc_fail(error,NC_CANCELLED,0);
+  }
+  return ready ? nc_ok(error) : nc_fail(error,NC_WOULD_BLOCK,0);
+#else
+  if (wake_handle>=0) return nc_fail(error,NC_UNSUPPORTED,0);
+  return net_core_os_wait(handle,writable,milliseconds,error);
+#endif
+}
 int32_t net_core_os_wait(intptr_t handle,int32_t writable,int32_t milliseconds,nc_error *error) {
   if (milliseconds < -1) return nc_fail(error,NC_ARGUMENT,0);
 #ifdef _WIN32
@@ -301,13 +475,16 @@ int32_t net_core_os_receive_from(intptr_t handle,uint8_t *data,intptr_t size,int
   if (size<0 || (!data && size)) return nc_fail(error,NC_ARGUMENT,0);
   if (size>INT_MAX) return nc_fail(error,NC_MESSAGE_SIZE,0);
   struct sockaddr_storage address; memset(&address,0,sizeof(address));
+  /* A zero iovec can return without receiving on Darwin. Always receive into
+   * real storage, then distinguish an empty message from an oversized one.
+   * Never write to a caller pointer whose declared capacity is zero. */
   uint8_t empty=0;
 #ifdef _WIN32
   nc_socklen address_size=sizeof(address);
-  int result=recvfrom((nc_socket)handle,(char *)(data ? data : &empty),(int)size,0,(struct sockaddr *)&address,&address_size);
+  int result=recvfrom((nc_socket)handle,(char *)(size ? data : &empty),size ? (int)size : 1,0,(struct sockaddr *)&address,&address_size);
   if (result<0) return nc_system(error,nc_last_error());
 #else
-  struct iovec buffer; buffer.iov_base=data ? data : &empty; buffer.iov_len=(size_t)size;
+  struct iovec buffer; buffer.iov_base=size ? data : &empty; buffer.iov_len=size ? (size_t)size : 1;
   struct msghdr message; memset(&message,0,sizeof(message));
   message.msg_name=&address; message.msg_namelen=sizeof(address); message.msg_iov=&buffer; message.msg_iovlen=1;
   ssize_t result=recvmsg((nc_socket)handle,&message,0);
@@ -315,6 +492,7 @@ int32_t net_core_os_receive_from(intptr_t handle,uint8_t *data,intptr_t size,int
   if (message.msg_flags&MSG_TRUNC) return nc_fail(error,NC_MESSAGE_SIZE,EMSGSIZE);
   nc_socklen address_size=message.msg_namelen;
 #endif
+  if (!size && result>0) return nc_fail(error,NC_MESSAGE_SIZE,NC_ERR(EMSGSIZE));
   if (nc_unpack((struct sockaddr *)&address,(size_t)address_size,sender,error)!=NC_OK) return error->kind;
   *out=(intptr_t)result;
   return nc_ok(error);

@@ -1,13 +1,51 @@
 /** @brief Copyable shared cancellation with ARC lifetime and atomic publication. */
-part of NetFoundation;
+part of NetTransport;
 
-struct NetCancelCell { cancelled: Atomic<int32>; }
+struct NetCancelCell {
+  cancelled: Atomic<int32>;
+  wake_read: intptr;
+  wake_write: intptr;
+  wake_live: bool;
+}
+method(NetCancelCell) operator drop() -> void {
+  if self.wake_live {
+    self.wake_live=false;
+    net_core_os_wake_close(self.wake_read,self.wake_write);
+  }
+}
 pub struct NetCancellation { cell: arc<NetCancelCell>?; }
 
 /** @brief Allocate one zero-initialized cancellation cell. */
 pub static method(NetCancellation) New() -> NetCancellation {
   let cell: arc<NetCancelCell> = new arc<NetCancelCell>{cancelled:Atomic<int32>{value:0}};
   return NetCancellation{cell:cell};
+}
+/** @brief Create a shared macOS cancellation cell with an owned OS wake channel. */
+pub static method(NetCancellation) NewWakeable() -> Result<NetCancellation,NetError> {
+  var read_handle:intptr=0 as intptr;
+  var write_handle:intptr=0 as intptr;
+  var error:NetNativeError=NetNativeError{};
+  if net_core_os_wake_open(&mut read_handle,&mut write_handle,&mut error)!=0 {
+    return net_native_error(error);
+  }
+  let cell:arc<NetCancelCell> = new arc<NetCancelCell>{
+    cancelled:Atomic<int32>{value:0},wake_read:read_handle,wake_write:write_handle,wake_live:true
+  };
+  return NetCancellation{cell:cell};
+}
+/** @brief Whether this token can interrupt native readiness waits immediately. */
+pub method(NetCancellation) CanWakeWaiters() -> bool {
+  let optional:arc<NetCancelCell>?=self.cell;
+  if optional==nil{return false;}
+  let cell:arc<NetCancelCell> = optional as arc<NetCancelCell>;
+  return cell.wake_live;
+}
+func net_cancellation_wake_handle(token:ref NetCancellation)->intptr {
+  let optional:arc<NetCancelCell>?=token.cell;
+  if optional==nil{return -1 as intptr;}
+  let cell:arc<NetCancelCell> = optional as arc<NetCancelCell>;
+  if !cell.wake_live{return -1 as intptr;}
+  return cell.wake_read;
 }
 /** @brief No allocation and no cancellation ability. */
 pub static method(NetCancellation) None() -> NetCancellation { return NetCancellation{}; }
@@ -18,7 +56,8 @@ pub method(NetCancellation) Cancel() -> void {
   let optional: arc<NetCancelCell>? = self.cell;
   if optional == nil { return; }
   var cell: arc<NetCancelCell> = optional as arc<NetCancelCell>;
-  cell.cancelled.Store(1,MemoryOrder.Release);
+  let previous:int32=cell.cancelled.Exchange(1,MemoryOrder.AcqRel);
+  if previous==0&&cell.wake_live { net_core_os_wake_signal(cell.wake_write); }
 }
 /** @brief Observe the sticky flag with acquire ordering. */
 pub method(NetCancellation) IsCancelled() -> bool {

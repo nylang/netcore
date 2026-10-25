@@ -30,11 +30,16 @@ func net_wait_socket(handle:intptr,writable:bool,options:ref NetOperationOptions
     let checked:Result<Unit,NetError> =options.Check(now);
     let failure:NetError?=checked.get_if<NetError>();if failure!=nil{return failure as NetError;}
     var timeout:int32=options.deadline.PollMilliseconds(now);
-    // N2 uses cooperative polling; N3 supplies an actual OS cancellation wakeup.
-    if options.cancellation.CanBeCancelled()&&(timeout<0||timeout>50){timeout=50;}
+    // Flag-only tokens retain cooperative polling; OS-backed tokens use only the deadline budget.
+    if options.cancellation.CanBeCancelled()&&!options.cancellation.CanWakeWaiters()&&(timeout<0||timeout>50){timeout=50;}
     var flag:int32=0;if writable{flag=1;}
     var error:NetNativeError=NetNativeError{};
-    let result:int32=net_core_os_wait(handle,flag,timeout,&mut error);
+    let wake_handle:intptr=net_cancellation_wake_handle(options.cancellation);
+    let result:int32=net_core_os_wait_wake(handle,flag,timeout,wake_handle,&mut error);
+    // Recheck both controls even if readiness and cancellation arrive together.
+    let active:Result<Unit,NetError> =net_check_operation(options);
+    let active_error:NetError?=active.get_if<NetError>();
+    if active_error!=nil{return active_error as NetError;}
     if result==0{return UnitValue();}
     if result!=15{return net_native_error(error);}
   }

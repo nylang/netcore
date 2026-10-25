@@ -73,7 +73,8 @@ guarantee against an unrelated concurrent fork. Socket writes suppress SIGPIPE
 per call or per socket without changing process-wide signal handlers.
 
 N2 provides synchronous methods over these primitives: try the operation,
-wait for readiness on WouldBlock/interruption, then retry. POSIX uses poll;
+wait for readiness on WouldBlock/interruption, then retry. macOS uses kqueue;
+other POSIX hosts use poll;
 Windows uses select with exception readiness for failed connect completion.
 Connect completion checks SO_ERROR. Read returns partial progress or zero on
 EOF; a zero-sized TCP operation returns zero without an OS receive/send.
@@ -98,6 +99,12 @@ WSAEMSGSIZE. The contracts are documented by
 [POSIX/Linux recv](https://man7.org/linux/man-pages/man2/recv.2.html) and
 [WinSock recvfrom](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-recvfrom).
 
+A zero-capacity receive uses a one-byte private scratch range at the OS boundary.
+An empty datagram succeeds; any positive payload is consumed and reported as
+MessageTooLarge. The adapter never writes through a caller pointer whose declared
+capacity is zero. This avoids Darwin's zero-iovec recvmsg behavior, which the
+controlled N3 acceptance reproduced as a false truncation/empty-socket result.
+
 ## Deadlines and cancellation
 
 Socket options use the same monotonic origin as NetClock.NowNanoseconds
@@ -107,12 +114,13 @@ A default NetOperationOptions has no deadline and an inert cancellation token.
 Closed resources fail before attempting I/O. Control checks give cancellation
 precedence over an expired deadline at the same observation.
 
-Every retry recomputes the remaining absolute deadline. A real cancellation
-cell caps readiness waits at 50 ms so the synchronous loop can recheck it;
-None avoids these periodic wakes. This is **cooperative polling**, not a hard
-cancellation-latency guarantee or an event-driven wakeup. Thread scheduling,
-clock/readiness granularity and synchronous DNS remain outside a hard deadline
-bound. N3 will provide real cancellation wakeups and executor-bound async I/O.
+Every retry recomputes the remaining absolute deadline. New() tokens cap native
+waits at 50 ms for cooperative flag checks; None avoids periodic wakes.
+NewWakeable() tokens on macOS use a sticky OS wake channel without that polling
+cap. Controls are checked after native waiting too. See [events.md](events.md)
+for cancellation races, resource ownership and the bounded readiness Future driver.
+Thread scheduling, clock/readiness granularity and synchronous DNS remain
+outside a hard deadline bound.
 A timeout/cancellation cannot undo bytes already transferred; methods return
 successful progress if the OS operation wins that observation race.
 
@@ -158,5 +166,22 @@ These are compile/static-link-input checks. Actual DNS/TCP/UDP behavior,
 move/drop/failed-construction descriptor lifetime, interruption, EOF/partial
 I/O, port-zero binding, truncation, deadlines and cancellation have not been
 run. Linux/Windows native compilation and runtime acceptance are pending too.
-N3 event loops, asynchronous resolution, executor affinity and real cancel
-wakeups remain subsequent work. HTTP/TLS/dependency fetching remain later stages.
+The N3 macOS increment adds kqueue/readiness Futures, active cancellation and
+nonblocking Try methods; see [events.md](events.md). Retained-buffer async
+transfers, async connect/resolution and their behavioral acceptance remain open.
+HTTP/TLS/dependency fetching remain later stages.
+
+## Current macOS N3 behavioral evidence
+
+The subsequent N3 acceptance passes 37 cases, then replays each case independently.
+It covers loopback TCP/UDP, controlled asynchronous DNS, notification/control
+races, retained owners, callback reentry and descriptor recovery. It discovered
+and fixed the zero-capacity UDP adapter issue above. Three 64-round FD recovery
+cases cover TCP connections, wakeable tokens and resolver pools; a late-worker
+Close case also waits for descriptor baseline recovery. These checks do not
+establish the absence of heap leaks or acceptance of other platforms.
+
+See [tests/README.md](../tests/README.md) for the repeatable runner, exact scope
+and remaining fault matrix. Current receipts are under ignored
+`cache/net-core-macos-n3-final-06/acceptance.json` in the workspace. The ordinary
+production package builds and has no net_core_test_* fixture imports.
