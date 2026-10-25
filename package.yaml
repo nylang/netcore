@@ -1,0 +1,10 @@
+name: net_core
+version: 0.1.0
+directories:
+  interface:
+    - interface
+  public:
+    - public
+  private:
+    - private
+    - tests

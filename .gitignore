@@ -1,0 +1,9 @@
+/cache/
+/bin/
+/lib/
+/out/
+/.tmp/
+__pycache__/
+*.o
+*.a
+.DS_Store
