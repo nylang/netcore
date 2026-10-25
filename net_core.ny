@@ -1,5 +1,7 @@
 /**
- * @brief Networking foundation package entry.
- * @note Package scaffold; transport and protocol APIs are not implemented yet.
+ * @brief Public networking foundation: addresses, errors, byte views and controls.
+ * @note OS transports and protocols are separate implementation stages.
  */
-module NetCore;
+export "interface/foundation.ni";
+import "interface/foundation.ni";
+import "private/foundation.ny";

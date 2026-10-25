@@ -1,3 +1,5 @@
-# interface
+# Public interfaces
 
-Reserved for net_core interface files as the networking foundation is implemented.
+`foundation.ni` declares the public network value/control contracts. Importers
+use the root `net_core.ny` barrel. Native descriptors, C symbols and helper types
+stay private.

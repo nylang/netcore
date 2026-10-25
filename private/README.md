@@ -1,3 +1,5 @@
-# private
+# Closed implementation
 
-Reserved for net_core private files as the networking foundation is implemented.
+`foundation.ny` defines the NetFoundation TU and explicitly lists its parts:
+address/endpoint parsing, failures, borrowed buffers, deadlines and cancellation.
+Future OS adapters belong here and are not barrel exports.
