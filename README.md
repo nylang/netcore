@@ -9,3 +9,7 @@ will use the public kernel/stdlib APIs; OS socket and event adapters stay privat
 No libcurl dependency or compiler-specific API is part of this package.
 
 See [ROADMAP.md](ROADMAP.md).
+
+## License
+
+Licensed under the [MIT License](LICENSE).
