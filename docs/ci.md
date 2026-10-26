@@ -102,5 +102,12 @@ was validated with --prepare-only; no GitHub release write was performed.
 Workflow definitions pass actionlint 1.7.7 with the custom runner label declared
 in .github/actionlint.yaml. Local receipts are under ignored private workspace
 cache/net-core-ci-public/. This is local workflow-command validation. Actual
-GitHub-hosted workflow execution still needs the changes to be pushed and the
-first hosted run to complete; it is not claimed by these local receipts.
+GitHub-hosted execution is recorded separately from those local receipts.
+
+The [first hosted run](https://github.com/nylang/netcore/actions/runs/40276141772)
+for commit 10a0e634676c614bdadd2e5bbaa6341658387061 passed all four automatic jobs.
+Linux and Windows each passed 38 N3 cases and all 38 isolated replays, with the
+production import gate also passing. macOS/iOS and Android native build jobs
+passed and uploaded their candidates and receipts. The draft-release job was
+correctly skipped for a main-branch push. No full hosted macOS Nyra or mobile
+device runtime acceptance is implied by those native jobs.

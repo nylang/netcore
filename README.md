@@ -1,5 +1,7 @@
 # net_core
 
+[![Network CI](https://github.com/nylang/netcore/actions/workflows/ci.yml/badge.svg)](https://github.com/nylang/netcore/actions/workflows/ci.yml)
+
 Independent Nyra networking foundation. The current implementation provides:
 
 - `IpAddress` and `NetEndpoint`: inline IPv4/IPv6 values, numeric scopes,

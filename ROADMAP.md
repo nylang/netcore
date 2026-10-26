@@ -136,7 +136,7 @@ Code added without such evidence remains implemented but unaccepted.
 - [x] Optional compatible-Mac manual Nyra workflow and local command.
 - [x] Matching-tag seven-target native candidate checksums and draft-only release flow.
 - [x] Workflow lint and local dry-run candidate validation.
-- [ ] First GitHub-hosted run after these definitions are committed/pushed.
+- [x] First GitHub-hosted run: all four automatic jobs passed (run 40276141772).
 - [ ] Lower-minimum macOS SDK before hosted full macOS Nyra acceptance.
 
 See [CI boundaries and operational requirements](docs/ci.md). No runner was
