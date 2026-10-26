@@ -127,3 +127,17 @@ tests/README.md; N1/N2 boundary matrices and other hosts remain separate gates.
 
 Each stage needs behavioral/platform evidence before it is reported usable.
 Code added without such evidence remains implemented but unaccepted.
+
+## Continuous integration and draft delivery
+
+- [x] Standalone public-SDK CI driver; no private compiler/workspace source dependency.
+- [x] Linux/Windows full N3 workflow commands, validated locally on both hosts.
+- [x] Hosted macOS native smoke plus Android/iOS native build jobs.
+- [x] Optional compatible-Mac manual Nyra workflow and local command.
+- [x] Matching-tag seven-target native candidate checksums and draft-only release flow.
+- [x] Workflow lint and local dry-run candidate validation.
+- [ ] First GitHub-hosted run after these definitions are committed/pushed.
+- [ ] Lower-minimum macOS SDK before hosted full macOS Nyra acceptance.
+
+See [CI boundaries and operational requirements](docs/ci.md). No runner was
+registered, tag created or release published while implementing these definitions.

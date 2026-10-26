@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import signal
 import shutil
 import subprocess
@@ -148,8 +149,9 @@ def main() -> int:
                                    "-j", "4", "--out-dir", str(out / "production-objects"),
                                    "-o", str(out / "production-package")])
         run("production-imports", [shutil.which("llvm-nm") or "nm", "-u", str(out / "production-package/lib/libpackage.a")])
-        if "net_core_test_" in (out / "production-imports.log").read_text():
-            raise RuntimeError("test fixture symbols leaked into the production package")
+        imports = (out / "production-imports.log").read_text()
+        if "net_core_test_" in imports or re.search(r"\b_?(?:AddFail|ClearFailCount|FailCount)\b", imports):
+            raise RuntimeError("test-only symbols leaked into the production package")
         if source_hashes() != inputs:
             raise RuntimeError("package sources changed during acceptance")
         report["production_fixture_imports"] = []

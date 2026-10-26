@@ -67,6 +67,12 @@ The acceptance scope and remaining fault/platform cases are listed explicitly.
 See [platform backends, build commands and evidence](docs/platforms.md), and
 [Android/iOS build and application integration](docs/mobile.md).
 
+## Continuous integration
+
+See [CI and draft delivery](docs/ci.md) for standalone public-SDK testing, native
+mobile builds, macOS compatibility and manual acceptance, and version-tag draft
+releases. The workflows do not fetch private compiler sources.
+
 ## License
 
 Licensed under the [MIT License](LICENSE).

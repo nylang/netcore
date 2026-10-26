@@ -120,3 +120,12 @@ Linux/Windows native implementation and remaining gates are in
 [mobile.md](../docs/mobile.md): four targets pass strict native compilation/linking
 and O2 Nyra package precompilation. No mobile behavior run is claimed. The earlier
 macOS-only 37-case receipts remain historical evidence, not the current count.
+
+## Standalone public SDK CI
+
+The tests now use four package-local soft assertion helpers in n3_assert_selftest.ny and
+the SDK test harness counter, with no ntest source dependency. scripts/ci.py stages
+the package against a hash-checked public SDK's precompiled stdlib/kernel. The
+original workspace package manifest remains unchanged by staging. Full suites and
+isolated replays also pass through this independent path on Linux, Windows and a
+compatible Mac. See [CI scope, receipts and macOS limits](../docs/ci.md).

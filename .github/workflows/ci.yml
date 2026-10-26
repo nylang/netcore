@@ -1,0 +1,173 @@
+name: Network CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: net-core-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  desktop:
+    name: Nyra tests / ${{ matrix.host }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            host: linux-x86_64
+          - runner: windows-2022
+            host: windows-x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Install Linux SDK runtime dependencies
+        if: runner.os == 'Linux'
+        shell: python
+        run: |
+          import subprocess
+          subprocess.run(['sudo', 'apt-get', 'update'], check=True)
+          subprocess.run(['sudo', 'apt-get', 'install', '-y', 'libxml2', 'zlib1g', 'libstdc++6'], check=True)
+      - name: Verify public SDK and run full N3 acceptance
+        shell: python
+        run: |
+          import os, subprocess, sys
+          subprocess.run([sys.executable, 'scripts/ci.py', 'desktop', '--out-dir', os.path.join(os.environ['RUNNER_TEMP'], 'net-core-desktop')], check=True)
+      - name: Acceptance receipts and logs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: evidence-${{ matrix.host }}
+          path: |
+            ${{ runner.temp }}/net-core-desktop/ci-report.json
+            ${{ runner.temp }}/net-core-desktop/step-*.log
+            ${{ runner.temp }}/net-core-desktop/acceptance/*.json
+            ${{ runner.temp }}/net-core-desktop/acceptance/*.log
+          retention-days: 14
+      - name: Native delivery candidate
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: candidate-${{ matrix.host }}
+          path: ${{ runner.temp }}/net-core-desktop/candidates/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  apple:
+    name: macOS and iOS native build
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: macOS adapter and iOS device/Simulator adapters
+        shell: python
+        run: |
+          import os, subprocess, sys
+          root = os.environ['RUNNER_TEMP']
+          subprocess.run([sys.executable, 'scripts/ci.py', 'native', '--out-dir', os.path.join(root, 'net-core-macos')], check=True)
+          subprocess.run([sys.executable, 'scripts/ci.py', 'mobile-native', '--target', 'ios-arm64', '--target', 'ios-simulator-arm64', '--out-dir', os.path.join(root, 'net-core-ios')], check=True)
+      - name: Apple build receipts and logs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: evidence-apple-native
+          path: |
+            ${{ runner.temp }}/net-core-macos/ci-report.json
+            ${{ runner.temp }}/net-core-macos/step-*.log
+            ${{ runner.temp }}/net-core-macos/native/native-manifest.json
+            ${{ runner.temp }}/net-core-ios/ci-report.json
+            ${{ runner.temp }}/net-core-ios/step-*.log
+            ${{ runner.temp }}/net-core-ios/mobile/*.json
+            ${{ runner.temp }}/net-core-ios/mobile/*.log
+          retention-days: 14
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: candidate-apple-native
+          path: |
+            ${{ runner.temp }}/net-core-macos/candidates/*.zip
+            ${{ runner.temp }}/net-core-ios/candidates/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  android:
+    name: Android arm64 and x86_64 native build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Install pinned NDK and build adapters
+        shell: python
+        run: |
+          import os, pathlib, shutil, subprocess, sys
+          sdk = pathlib.Path(os.environ['ANDROID_HOME'])
+          manager = shutil.which('sdkmanager') or str(sdk / 'cmdline-tools/latest/bin/sdkmanager')
+          subprocess.run([manager, 'ndk;26.1.10909125'], input='y\n' * 100, text=True, check=True, timeout=900)
+          subprocess.run([sys.executable, 'scripts/ci.py', 'mobile-native', '--target', 'android-arm64', '--target', 'android-x86_64', '--android-ndk', str(sdk / 'ndk/26.1.10909125'), '--out-dir', os.path.join(os.environ['RUNNER_TEMP'], 'net-core-android')], check=True)
+      - name: Android build receipts and logs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: evidence-android-native
+          path: |
+            ${{ runner.temp }}/net-core-android/ci-report.json
+            ${{ runner.temp }}/net-core-android/step-*.log
+            ${{ runner.temp }}/net-core-android/mobile/*.json
+            ${{ runner.temp }}/net-core-android/mobile/*.log
+          retention-days: 14
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: candidate-android-native
+          path: ${{ runner.temp }}/net-core-android/candidates/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  draft-release:
+    name: Draft native-component release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [desktop, apple, android]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: candidate-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/native-candidates
+      - name: Validate tag and create draft only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: python
+        run: |
+          import os, subprocess, sys
+          subprocess.run([sys.executable, 'scripts/ci_release.py', '--tag', os.environ['RELEASE_TAG'], '--assets', os.path.join(os.environ['RUNNER_TEMP'], 'native-candidates')], check=True)
