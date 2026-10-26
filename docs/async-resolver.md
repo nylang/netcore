@@ -13,10 +13,10 @@ worker_count..256 retained slots. It creates every worker during construction;
 registration never creates a thread. Mutex, condition-variable or worker startup
 failure returns System. Partial startup marks the pool closed and wakes already
 started workers so they exit. No live resolver is returned on startup failure.
-On macOS construction also creates a nonblocking notification socket pair;
-native failure is returned before starting workers. Outside macOS the worker
-pool remains available as source, while WhenReady returns NotSupported. Those
-hosts still require their own compilation/runtime acceptance.
+On macOS, Linux and Windows construction also creates a nonblocking notification
+socket pair; native failure is returned before starting workers. WhenReady uses
+the matching event backend. Linux/Windows Nyra runtime acceptance remains open;
+see [platform evidence](platforms.md).
 
 `ResolveAsync(host, port, family, max_results, options)` returns
 `Result<AsyncFuture<NetResolution>, NetError>`. It validates hostname size
@@ -59,7 +59,7 @@ It returns the number of newly published Futures. It does not pump socket events
 or an executor itself, and an await cannot implicitly drive it. Use a scheduled
 outer loop with a bounded wait; do not spin on Poll waiting for OS DNS.
 
-### Readiness integration on macOS
+### Readiness integration
 
 WhenReady(driver, options) registers an advisory progress Future in the same
 caller-thread NetEventLoop. A pool owns one notification pair, not a pair per
@@ -208,3 +208,11 @@ Receipts and source/compiler hashes are in ignored
 `cache/net-core-macos-n3-final-06/acceptance.json`. Thread creation failure after
 partial worker startup and other explicit fault/platform gates remain open in
 [tests/README.md](../tests/README.md).
+
+## Cross-platform acceptance update
+
+The current shared N3 suite passes 38/38 cases plus 38/38 isolated replays on each
+of macOS arm64, Linux x86_64 and Windows x86_64. Android arm64/x86_64 and iOS
+device/Simulator arm64 pass native compile/link checks and Nyra precompilation.
+Earlier macOS-only counts above are historical. See [current receipts and scope](../tests/README.md),
+[platform implementation](platforms.md) and [mobile integration](mobile.md).

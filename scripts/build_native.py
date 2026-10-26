@@ -28,6 +28,8 @@ def main() -> int:
     if output == PACKAGE or PACKAGE in output.parents:
         parser.error("--out-dir must be outside the net_core source package")
     output.mkdir(parents=True, exist_ok=True)
+    actual_target = args.target or subprocess.check_output([args.cc, "-dumpmachine"], text=True).strip()
+    windows = any(marker in actual_target.lower() for marker in ("windows", "mingw", "win32"))
     source = PACKAGE / "private/native/net_core_os.c"
     header = source.with_suffix(".h")
     with tempfile.TemporaryDirectory(prefix=".native-", dir=output) as temporary:
@@ -39,7 +41,7 @@ def main() -> int:
             command += ["--target=" + target]
         if args.sysroot:
             command += ["--sysroot=" + str(args.sysroot.expanduser().resolve())]
-        if "windows" in target or (not target and os.name == "nt"):
+        if windows:
             command += ["-mno-incremental-linker-compatible"]
         else:
             command += ["-fPIC"]
@@ -52,9 +54,12 @@ def main() -> int:
         subprocess.run(ar_command, check=True)
         os.replace(archive, output / archive.name)
     shutil.copy2(PACKAGE / "LICENSE", output / "LICENSE")
-    actual_target = target or subprocess.check_output([args.cc, "-dumpmachine"], text=True).strip()
     record = {"format": "net-core-native-v1", "abi": 1, "license": "MIT", "target": actual_target,
-              "archive": "libnet_core_native.a", "compile": command, "archive_command": ar_command,
+              "archive": "libnet_core_native.a",
+              "system_libraries": ["ws2_32", "iphlpapi"] if windows else [],
+              "event_backend": ("select" if windows else "poll" if "linux" in actual_target else
+                                "kqueue" if "darwin" in actual_target or "macos" in actual_target or "ios" in actual_target else "unsupported"),
+              "compile": command, "archive_command": ar_command,
               "inputs": {p.relative_to(PACKAGE).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                          for p in (source, header, PACKAGE / "LICENSE")},
               "archive_sha256": hashlib.sha256((output / "libnet_core_native.a").read_bytes()).hexdigest()}

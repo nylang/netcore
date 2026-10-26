@@ -76,7 +76,7 @@ reusing the original duration would extend the overall operation deadline.
 it. Cancellation is sticky: Cancel publishes with an acquire/release exchange;
 IsCancelled loads with acquire ordering. None/default allocates nothing and is inert.
 There is no reset or callback registration. New remains flag-only.
-NewWakeable is a fallible macOS factory for an ARC-owned OS wake channel;
+NewWakeable is a fallible macOS/Linux/Windows factory for an ARC-owned OS wake channel;
 its lifetime and race contracts are documented in [events.md](events.md).
 
 `NetOperationOptions.Check(now_ns)` gives cancellation precedence over timeout

@@ -32,7 +32,7 @@ pub method(AsyncResolver) operator drop() -> void;
  * @returns Pool or a validation/startup/native failure; partial startup stops its workers.
  * @note Each lookup retains at most 1024 hostname bytes and 4096 endpoints. Jobs use the
  *       process heap, never a caller arena. Limits are per pool, not global process limits.
- *       On macOS creation also allocates one resettable notification socket pair.
+ *       On macOS, Linux, Windows, Android and iOS creation also allocates one resettable notification socket pair.
  */
 pub static method(AsyncResolver) New(worker_count: int32, max_pending: int32) -> Result<AsyncResolver, NetError>;
 /**
@@ -48,7 +48,7 @@ pub method(AsyncResolver) ResolveAsync(host: ref string, port: int32, family: Ip
  */
 pub method(AsyncResolver) PendingCount() -> int32;
 /**
- * @brief Register advisory DNS progress on a macOS NetEventLoop without publishing query results.
+ * @brief Register advisory DNS progress on a NetEventLoop without publishing query results.
  * @param driver Caller-thread event loop; one pending notification per resolver in this driver.
  * @param options Controls for this notification, independent of the individual queries.
  * @returns Local readiness Future or Closed/NotSupported/WouldBlock/registration failure.

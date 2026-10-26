@@ -358,7 +358,7 @@ func test_net_core_n3_wake_token_descriptor_recovery() {
 func test_net_core_n3_failed_connect_retires_descriptor() {
   let baseline: int32 = net_core_test_fd_count();
   var driver: NetEventLoop = net_test_loop(2);
-  // Darwin rejects remote port zero. It cannot name an OS-assigned listener,
+  // Remote port zero cannot name an OS-assigned listener,
   // so this failure fixture never races another process acquiring a free port.
   let endpoint: NetEndpoint = (NetEndpoint.Parse("127.0.0.1:0").get_if<NetEndpoint>()) as NetEndpoint;
   var queued: Result<TcpConnectionTask, NetError> = TcpConnection.DialAsync(driver, endpoint, net_test_options());
@@ -366,10 +366,17 @@ func test_net_core_n3_failed_connect_retires_descriptor() {
   var task: TcpConnectionTask = move((queued.get_if<TcpConnectionTask>()) as TcpConnectionTask);
   let future: AsyncFuture<Result<Unit, NetError>> = net_test_task_future(task);
   net_test_pump(driver, future);
-  AssertTrueMsg(net_test_ready_error(future) == NetErrorKind.AddressUnavailable, "preserve Darwin's remote port-zero error");
+  let expected: NetErrorKind = net_native_error(NetNativeError{kind: net_core_test_failed_connect_kind()}).kind;
+  AssertTrueMsg(net_test_ready_error(future) == expected, "preserve the platform's remote port-zero error");
   let take: Result<TcpConnection, NetError> = task.TakeConnection();
   AssertTrueMsg(take.IsErr(), "failed task never exposes a socket owner");
-  AssertTrueMsg(((take.get_if<NetError>()) as NetError).kind == NetErrorKind.AddressUnavailable, "TakeConnection preserves the failure");
+  AssertTrueMsg(((take.get_if<NetError>()) as NetError).kind == expected, "TakeConnection preserves the failure");
   AssertEqI32Msg(driver.PendingCount(), 0, "failed connect registration retired");
   net_test_fd_baseline(baseline);
+}
+
+@extern("C") func net_core_test_wait_large_snapshot() -> int32;
+@test(tag = "net_core_n3")
+func test_net_core_n3_large_native_snapshot_fanout() {
+  AssertEqI32Msg(net_core_test_wait_large_snapshot(), 0, "144 distinct read interests preserve readiness and cancellation fanout");
 }

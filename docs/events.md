@@ -1,4 +1,4 @@
-# macOS readiness and cancellation (N3 increment)
+# Readiness and cancellation (N3)
 
 ## Scope
 
@@ -9,7 +9,8 @@ queue borrowed I/O buffers. The next increment implements retained-buffer
 transfers, numeric async connect and accept in [async-transport.md](async-transport.md).
 Bounded asynchronous DNS is implemented in [async-resolver.md](async-resolver.md),
 with its own explicit worker pool and caller-thread Poll. HTTP and TLS remain later
-stages. Linux/Windows event adapters are deferred while macOS is developed.
+stages. Linux poll and Windows select adapters now share these contracts; see
+[platform implementation and evidence](platforms.md).
 
 The private C adapter is the OS boundary. Queue policy, resource ownership,
 deadlines, cancellation priority and Future publication stay in Nyra's
@@ -22,9 +23,10 @@ resources. All exports remain behind the package's public interfaces.
 - `None()` and the default token have no cell or native resource.
 - `New()` allocates a shared atomic flag. It retains its existing portable,
   cooperative behavior, with cancellable native waits capped at 50 ms.
-- `NewWakeable()` returns `Result<NetCancellation, NetError>`. On macOS it owns
+- `NewWakeable()` returns `Result<NetCancellation, NetError>`. On macOS/Linux it owns
   one nonblocking, non-inheritable AF_UNIX socket pair in the shared ARC cell.
-  Native resource failure is returned; outside macOS it returns NotSupported.
+  Windows uses a private loopback TCP pair. Native resource failure is returned;
+  other unsupported platforms return NotSupported.
   It does not silently degrade to flag polling.
 - `CanWakeWaiters()` distinguishes the two cancellation capabilities.
 
@@ -204,3 +206,11 @@ The exact receipt, per-case CPU/RSS and remaining fault coverage are documented
 in [tests/README.md](../tests/README.md). Forced native wait/duplicate failure,
 active-registration descriptor reuse and expiry injected specifically during
 snapshot preparation remain open.
+
+## Cross-platform acceptance update
+
+The current shared N3 suite passes 38/38 cases plus 38/38 isolated replays on each
+of macOS arm64, Linux x86_64 and Windows x86_64. Android arm64/x86_64 and iOS
+device/Simulator arm64 pass native compile/link checks and Nyra precompilation.
+Earlier macOS-only counts above are historical. See [current receipts and scope](../tests/README.md),
+[platform implementation](platforms.md) and [mobile integration](mobile.md).

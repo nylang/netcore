@@ -1,11 +1,13 @@
-/** @brief macOS N3 behavior cases; all network traffic is local or fixture-controlled. */
+/** @brief Cross-platform N3 behavior cases; all network traffic is local or fixture-controlled. */
 part of NetTransport;
 
+@extern("C") func net_core_test_failed_connect_kind() -> int32;
 @extern("C") func net_core_test_dns_reset() -> int32;
 @extern("C") func net_core_test_dns_entered() -> int32;
 @extern("C") func net_core_test_dns_active() -> int32;
 @extern("C") func net_core_test_dns_peak() -> int32;
 @extern("C") func net_core_test_dns_release() -> void;
+@extern("C") func net_core_test_resource_report(expected: int32) -> void;
 @extern("C") func net_core_test_fd_count() -> int32;
 @extern("C") func net_core_test_native_direction() -> int32;
 @extern("C") func net_core_test_empty_udp_readiness() -> int32;
@@ -130,7 +132,8 @@ func net_test_retire_dns(resolver: ref mut AsyncResolver) -> void {
 func net_test_fd_baseline(expected: int32) -> void {
   var i: int32 = 0;
   while net_core_test_fd_count() != expected && i < 2000 { Thread.Sleep(1u32); i = i + 1; }
-  AssertEqI32Msg(net_core_test_fd_count(), expected, "n3_selftest.ny:130");
+  if net_core_test_fd_count() != expected { net_core_test_resource_report(expected); }
+  AssertEqI32Msg(net_core_test_fd_count(), expected, "resource handles return to the warmed baseline");
 }
 func net_test_resolution(resolver: ref mut AsyncResolver, future: ref AsyncFuture<NetResolution>) -> NetResolution {
   var i: int32 = 0;

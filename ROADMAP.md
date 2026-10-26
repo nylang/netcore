@@ -48,15 +48,17 @@ acceptance are pending. See [transport.md](docs/transport.md).
       SIGPIPE suppression and descriptor/length validation.
 - [x] Independent native library builder, MIT notices and ordinary linker arguments.
 - [ ] Behavioral resource/I/O/deadline/cancellation coverage and real network acceptance.
-- [ ] Linux/Windows native compilation and runtime acceptance.
+- [x] Linux/Windows native compilation and controlled N3 runtime acceptance.
+- [ ] Broader real-network/OS DNS and interface acceptance.
 - [ ] Cross-target SDK artifact integration/acceptance with matching sysroot/CRT.
 
 ## N3 — Asynchronous transport
 
-macOS is the current development target. Readiness, retained transfers, numeric
-connect, accept and bounded asynchronous DNS implementations pass 37 controlled
-macOS behavior cases plus independent runtime replays. Advanced fault injection
-and other-host acceptance remain open. See [tests/README.md](tests/README.md), [events.md](docs/events.md),
+macOS arm64, Linux x86_64 and Windows x86_64 readiness, retained transfers, numeric
+connect, accept and bounded asynchronous DNS pass 38 controlled behavior cases per
+host plus all independent runtime replays. Android arm64/x86_64 and iOS device/
+Simulator arm64 pass native compilation/linking and O2 Nyra package precompilation.
+Advanced fault injection and mobile runtime acceptance remain open. See [tests/README.md](tests/README.md), [events.md](docs/events.md),
 [async-transport.md](docs/async-transport.md) and [async-resolver.md](docs/async-resolver.md).
 
 - [x] macOS kqueue snapshots, explicitly owned duplicated registrations and local driver affinity.
@@ -74,9 +76,16 @@ and other-host acceptance remain open. See [tests/README.md](tests/README.md), [
 - [x] macOS DNS progress notifications, query-control wait budgets and retained notification ownership.
 - [x] Controlled async DNS behavior, resource/cancellation/notification cases and notification-startup FD failure.
 - [ ] Partial worker startup and mutex/CV/thread fault injection; forced wait/duplicate/reuse paths.
-- [ ] Linux/Windows event adapters and acceptance after macOS stabilization.
+- [x] Linux poll and Windows select event adapters, wake channels and duplicated registrations.
+- [x] Strict native adapter compilation on macOS arm64, Linux x86_64 and Windows x86_64.
+- [x] Linux/Windows 38-case suites and 38 isolated replays per host, including resource recovery.
+- [x] Shared portable DNS fixture, platform startup-failure injection and 144-interest fanout case.
+- [x] Android arm64/x86_64 and iOS device/Simulator arm64 native compile/link and Nyra precompile.
+- [ ] Remaining fault matrices, mobile runtime acceptance and published SDK integration.
 
-The repeatable macOS runner is scripts/accept_macos.py. It records source/compiler
+The repeatable desktop runner is scripts/accept.py (accept_macos.py remains a
+compatibility entry). scripts/build_mobile.py handles explicit Android/iOS targets.
+The runners record source/compiler
 hashes, complete-suite results, separate runtime CPU/RSS and production-fixture
 isolation. Next closure work is the explicit fault-injection matrix in
 tests/README.md; N1/N2 boundary matrices and other hosts remain separate gates.

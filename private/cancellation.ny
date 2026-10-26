@@ -20,7 +20,7 @@ pub static method(NetCancellation) New() -> NetCancellation {
   let cell: arc<NetCancelCell> = new arc<NetCancelCell>{cancelled:Atomic<int32>{value:0}};
   return NetCancellation{cell:cell};
 }
-/** @brief Create a shared macOS cancellation cell with an owned OS wake channel. */
+/** @brief Create a shared cross-platform cancellation cell with an owned OS wake channel. */
 pub static method(NetCancellation) NewWakeable() -> Result<NetCancellation,NetError> {
   var read_handle:intptr=0 as intptr;
   var write_handle:intptr=0 as intptr;

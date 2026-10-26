@@ -133,13 +133,13 @@ pub method(NetDeadline) PollMilliseconds(now_ns: uint64) -> int32;
 
 /**
  * @brief Shared sticky cancellation flag; copies share an ARC-owned atomic cell.
- * @note No reset or callbacks. New is flag-only; NewWakeable owns a macOS wake channel.
+ * @note No reset or callbacks. New is flag-only; NewWakeable owns an OS wake channel.
  */
 pub struct NetCancellation;
 /** @brief Allocate one shared atomic cancellation cell, initially not cancelled. */
 pub static method(NetCancellation) New() -> NetCancellation;
 /**
- * @brief Allocate a macOS OS-backed token shared by copies; last drop closes its wake channel.
+ * @brief Allocate an OS-backed token shared by copies; last drop closes its wake channel.
  * @returns Token, OS resource failure, or NotSupported on other hosts; never silently polls.
  * @note Cancel wakes all current/future readiness waits without periodic polling.
  */

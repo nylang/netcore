@@ -259,3 +259,11 @@ seconds and a 2,654,208-byte process peak RSS. This is a single local case sampl
 not a throughput benchmark or live-heap measurement. Receipts are under ignored
 `cache/net-core-macos-n3-final-06/acceptance.json`; remaining fault/platform gates
 are explicit in [tests/README.md](../tests/README.md).
+
+## Cross-platform acceptance update
+
+The current shared N3 suite passes 38/38 cases plus 38/38 isolated replays on each
+of macOS arm64, Linux x86_64 and Windows x86_64. Android arm64/x86_64 and iOS
+device/Simulator arm64 pass native compile/link checks and Nyra precompilation.
+Earlier macOS-only counts above are historical. See [current receipts and scope](../tests/README.md),
+[platform implementation](platforms.md) and [mobile integration](mobile.md).

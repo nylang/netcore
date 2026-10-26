@@ -43,7 +43,7 @@ pub struct NetTransfer {
  *       charge the entire buffer backing, including when a small slice retains a large root.
  *       Shared buffers are charged per operation conservatively. Completed consumer-owned
  *       buffers and fixed queue/Future/native overhead are outside this pending-byte budget.
- * @returns Driver, InvalidArgument, or NotSupported outside macOS.
+ * @returns Driver, InvalidArgument, or NotSupported on unsupported platforms.
  */
 pub static method(NetEventLoop) NewWithLimits(max_pending: int32, max_retained_bytes: intptr) -> Result<NetEventLoop, NetError>;
 /** @brief Pending transfer backing bytes currently charged to this driver. */

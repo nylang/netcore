@@ -106,7 +106,7 @@ pub method(UdpSocket) IsOpen() -> bool;
 pub method(UdpSocket) Close() -> Result<Unit, NetError>;
 
 /**
- * @brief Move-only macOS readiness driver with a bounded queue and local Future affinity.
+ * @brief Move-only cross-platform readiness driver with a bounded queue and local Future affinity.
  * @note No hidden threads. Register/Poll/Close/Future access stay on one driver thread.
  *       Only NetCancellation.Cancel may run on another thread using a retained token copy.
  */
@@ -119,7 +119,7 @@ pub method(NetEventLoop) operator move() -> NetEventLoop;
 pub method(NetEventLoop) operator drop() -> void;
 /**
  * @brief Create a local operation queue with capacity in 1..256 and a 16 MiB pending-payload budget.
- * @returns Driver, InvalidArgument, or NotSupported outside macOS.
+ * @returns Driver, InvalidArgument, or NotSupported on unsupported platforms.
  * @note Full queues fail with WouldBlock; no background threads or unbounded task growth.
  */
 pub static method(NetEventLoop) New(max_pending: int32) -> Result<NetEventLoop, NetError>;

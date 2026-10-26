@@ -8,6 +8,10 @@
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0600
 #endif
+#ifdef FD_SETSIZE
+#undef FD_SETSIZE
+#endif
+#define FD_SETSIZE 1024
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -33,7 +37,7 @@ typedef int nc_socklen;
 #include <poll.h>
 #ifdef __APPLE__
 #include <TargetConditionals.h>
-#if TARGET_OS_OSX
+#if TARGET_OS_OSX || TARGET_OS_IPHONE
 #define NC_MACOS_EVENTS 1
 #include <sys/event.h>
 #include <sys/time.h>
@@ -51,6 +55,21 @@ typedef socklen_t nc_socklen;
 #include "net_core_os.h"
 #include <limits.h>
 #include <string.h>
+
+/* Controlled acceptance builds replace DNS after system declarations, so the
+ * WinSock dllimport attribute never applies to the test implementation. */
+#ifdef NET_CORE_TEST_DNS
+#ifdef _WIN32
+extern int WSAAPI net_core_test_getaddrinfo(const char *,const char *,const struct addrinfo *,struct addrinfo **);
+#else
+extern int net_core_test_getaddrinfo(const char *,const char *,const struct addrinfo *,struct addrinfo **);
+#endif
+#define getaddrinfo net_core_test_getaddrinfo
+#endif
+
+#if defined(NC_MACOS_EVENTS) || defined(__linux__) || defined(_WIN32)
+#define NC_EVENTS 1
+#endif
 
 static int32_t nc_fail(nc_error *out, int32_t kind, int code) {
   if (out) { out->kind=kind; out->native_code=code; }
@@ -231,9 +250,61 @@ int32_t net_core_os_accept(intptr_t handle,intptr_t *out,nc_error *error) {
  * including one which registers after cancellation. ARC owns both endpoints. */
 int32_t net_core_os_wake_open(intptr_t *read_handle,intptr_t *write_handle,nc_error *error) {
   *read_handle=-1; *write_handle=-1;
-#ifdef NC_MACOS_EVENTS
+#ifdef _WIN32
+  /* WinSock select accepts sockets only. A private loopback TCP pair is also
+   * duplicable using the same ownership rules as transport registrations. */
+  if (nc_acquire(error)!=NC_OK) return error->kind;
+  SOCKET listener=INVALID_SOCKET,reader=INVALID_SOCKET,writer=INVALID_SOCKET;
+  int code=0;
+  struct sockaddr_in address; memset(&address,0,sizeof(address));
+  address.sin_family=AF_INET; address.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
+  int length=sizeof(address);
+  listener=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+  if (listener==INVALID_SOCKET) goto failed;
+  if (bind(listener,(struct sockaddr *)&address,sizeof(address))==SOCKET_ERROR ||
+      listen(listener,1)==SOCKET_ERROR ||
+      getsockname(listener,(struct sockaddr *)&address,&length)==SOCKET_ERROR) goto failed;
+  code=nc_configure(listener);
+  if (code) goto failed;
+  writer=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+  if (writer==INVALID_SOCKET) goto failed;
+  code=nc_configure(writer);
+  if (code) goto failed;
+  if (connect(writer,(struct sockaddr *)&address,sizeof(address))==SOCKET_ERROR) {
+    code=nc_last_error();
+    if (code!=WSAEWOULDBLOCK && code!=WSAEINPROGRESS) goto failed;
+    nc_error pending;
+    if (net_core_os_wait((intptr_t)writer,1,1000,&pending)!=NC_OK) {
+      code=pending.native_code ? pending.native_code : WSAETIMEDOUT; goto failed;
+    }
+    if (net_core_os_connect_result((intptr_t)writer,&pending)!=NC_OK) {
+      code=pending.native_code; goto failed;
+    }
+  }
+  code=0;
+  reader=accept(listener,NULL,NULL);
+  if (reader==INVALID_SOCKET) goto failed;
+  code=nc_configure(reader);
+  if (!code) code=nc_configure(writer);
+  if (code) goto failed;
+  closesocket(listener);
+  *read_handle=(intptr_t)reader; *write_handle=(intptr_t)writer;
+  return nc_ok(error);
+failed:
+  if (!code) code=nc_last_error();
+  if (listener!=INVALID_SOCKET) closesocket(listener);
+  if (reader!=INVALID_SOCKET) closesocket(reader);
+  if (writer!=INVALID_SOCKET) closesocket(writer);
+  nc_release();
+  return nc_system(error,code);
+#elif defined(NC_EVENTS)
   int pair[2];
-  if (socketpair(AF_UNIX,SOCK_STREAM,0,pair)<0) return nc_system(error,errno);
+#ifdef __linux__
+  int type=SOCK_STREAM|SOCK_NONBLOCK|SOCK_CLOEXEC;
+#else
+  int type=SOCK_STREAM;
+#endif
+  if (socketpair(AF_UNIX,type,0,pair)<0) return nc_system(error,errno);
   int code=nc_configure(pair[0]);
   if (!code) code=nc_configure(pair[1]);
   if (code) { close(pair[0]); close(pair[1]); return nc_system(error,code); }
@@ -244,35 +315,49 @@ int32_t net_core_os_wake_open(intptr_t *read_handle,intptr_t *write_handle,nc_er
 #endif
 }
 void net_core_os_wake_close(intptr_t read_handle,intptr_t write_handle) {
-#ifdef NC_MACOS_EVENTS
-  close((int)read_handle); close((int)write_handle);
+#ifdef NC_EVENTS
+  nc_raw_close((nc_socket)read_handle); nc_raw_close((nc_socket)write_handle);
+  nc_release(); /* The pair owns one WinSock startup reference. */
 #else
   (void)read_handle; (void)write_handle;
 #endif
 }
 void net_core_os_wake_signal(intptr_t write_handle) {
-#ifdef NC_MACOS_EVENTS
-  const uint8_t byte=1;
+#ifdef NC_EVENTS
+  const char byte=1;
+#ifdef _WIN32
+  int result;
+  do { result=send((nc_socket)write_handle,&byte,1,0); } while (result<0 && nc_last_error()==WSAEINTR);
+#else
+  int flags=0;
+#ifdef MSG_NOSIGNAL
+  flags=MSG_NOSIGNAL;
+#endif
   ssize_t result;
-  do { result=send((int)write_handle,&byte,1,0); } while (result<0 && errno==EINTR);
-  /* One writer wins the atomic transition. Both endpoints remain owned and
-   * configured; EAGAIN already means the channel is readable. No bytes drain. */
+  do { result=send((nc_socket)write_handle,&byte,1,flags); } while (result<0 && errno==EINTR);
+#endif
+  /* A full channel is already readable. Cancellation bytes are never drained. */
 #else
   (void)write_handle;
 #endif
 }
 int32_t net_core_os_notify_drain(intptr_t read_handle,nc_error *error) {
-#ifdef NC_MACOS_EVENTS
-  uint8_t bytes[256];
-  /* Bound work even under interruption. Remaining bytes simply keep readiness
-   * asserted for a later batch. This must never drain a cancellation channel. */
+#ifdef NC_EVENTS
+  char bytes[256];
   for (int attempt=0;attempt<8;attempt++) {
-    ssize_t count=recv((int)read_handle,bytes,sizeof(bytes),0);
+#ifdef _WIN32
+    int count=recv((nc_socket)read_handle,bytes,sizeof(bytes),0);
+#else
+    ssize_t count=recv((nc_socket)read_handle,bytes,sizeof(bytes),0);
+#endif
     if (count>0) continue;
     if (!count) return nc_fail(error,NC_CLOSED,0);
-    int code=errno;
-    if (code==EINTR) continue;
-    if (code==EAGAIN || code==EWOULDBLOCK) return nc_ok(error);
+    int code=nc_last_error();
+    if (code==NC_ERR(EINTR)) continue;
+    if (code==NC_ERR(EWOULDBLOCK)) return nc_ok(error);
+#ifndef _WIN32
+    if (code==EAGAIN) return nc_ok(error);
+#endif
     return nc_system(error,code);
   }
   return nc_ok(error);
@@ -282,7 +367,7 @@ int32_t net_core_os_notify_drain(intptr_t read_handle,nc_error *error) {
 #endif
 }
 int32_t net_core_os_events_supported(void) {
-#ifdef NC_MACOS_EVENTS
+#ifdef NC_EVENTS
   return 1;
 #else
   return 0;
@@ -290,7 +375,19 @@ int32_t net_core_os_events_supported(void) {
 }
 int32_t net_core_os_duplicate(intptr_t handle,intptr_t *out,nc_error *error) {
   *out=-1;
-#ifdef NC_MACOS_EVENTS
+#ifdef _WIN32
+  if (nc_acquire(error)!=NC_OK) return error->kind;
+  WSAPROTOCOL_INFOW info;
+  if (WSADuplicateSocketW((SOCKET)handle,GetCurrentProcessId(),&info)==SOCKET_ERROR) {
+    int code=nc_last_error(); nc_release(); return nc_system(error,code);
+  }
+  SOCKET value=WSASocketW(FROM_PROTOCOL_INFO,FROM_PROTOCOL_INFO,FROM_PROTOCOL_INFO,&info,0,WSA_FLAG_OVERLAPPED);
+  if (value==INVALID_SOCKET) { int code=nc_last_error(); nc_release(); return nc_system(error,code); }
+  int code=nc_configure(value);
+  if (code) { closesocket(value); nc_release(); return nc_system(error,code); }
+  *out=(intptr_t)value;
+  return nc_ok(error);
+#elif defined(NC_EVENTS)
   int descriptor=fcntl((int)handle,F_DUPFD_CLOEXEC,0);
   if (descriptor<0) return nc_system(error,errno);
   *out=descriptor;
@@ -353,6 +450,81 @@ int32_t net_core_os_wait_many(nc_wait_item *items,int32_t count,int32_t millisec
     }
   }
   return nc_ok(error);
+#elif defined(_WIN32)
+  /* select reports failed nonblocking connects in exceptfds. WSAPoll does
+   * not provide that contract consistently on supported Windows versions. */
+  fd_set reads,writes,exceptions;
+  FD_ZERO(&reads); FD_ZERO(&writes); FD_ZERO(&exceptions);
+  int total=0;
+  for (int32_t i=0;i<count;i++) {
+    nc_wait_item *item=&items[i];
+    if (item->ready) continue;
+    if (item->handle<0) return nc_fail(error,NC_CLOSED,WSAENOTSOCK);
+    SOCKET value=(SOCKET)item->handle;
+    if (item->writable) FD_SET(value,&writes); else FD_SET(value,&reads);
+    FD_SET(value,&exceptions);
+    if (item->wake_handle>=0) {
+      FD_SET((SOCKET)item->wake_handle,&reads);
+      FD_SET((SOCKET)item->wake_handle,&exceptions);
+    }
+    total++;
+  }
+  if (!total) return nc_ok(error);
+  struct timeval budget={milliseconds<0 ? 0 : milliseconds/1000,
+                         milliseconds<0 ? 0 : (milliseconds%1000)*1000};
+  int ready=select(0,&reads,&writes,&exceptions,milliseconds<0 ? NULL : &budget);
+  if (ready<0) {
+    int code=nc_last_error();
+    return code==WSAEINTR ? nc_ok(error) : nc_system(error,code);
+  }
+  for (int32_t i=0;i<count;i++) {
+    nc_wait_item *item=&items[i];
+    if (item->ready) continue;
+    SOCKET value=(SOCKET)item->handle,wake=(SOCKET)item->wake_handle;
+    if (item->wake_handle>=0 && (FD_ISSET(wake,&reads) || FD_ISSET(wake,&exceptions))) {
+      item->ready=1; item->kind=NC_CANCELLED; item->native_code=0;
+    } else if (FD_ISSET(value,&exceptions) ||
+               (item->writable ? FD_ISSET(value,&writes) : FD_ISSET(value,&reads))) {
+      item->ready=1; item->kind=NC_OK; item->native_code=0;
+    }
+  }
+  return nc_ok(error);
+#elif defined(__linux__)
+  struct pollfd descriptors[512];
+  int indices[256],wakes[256],total=0;
+  memset(descriptors,0,sizeof(descriptors));
+  for (int32_t i=0;i<count;i++) {
+    indices[i]=-1; wakes[i]=-1;
+    if (items[i].ready) continue;
+    if (items[i].handle<0 || items[i].handle>INT_MAX || items[i].wake_handle>INT_MAX)
+      return nc_fail(error,NC_CLOSED,EBADF);
+    indices[i]=total;
+    descriptors[total].fd=(int)items[i].handle;
+    descriptors[total++].events=items[i].writable ? POLLOUT : POLLIN;
+    if (items[i].wake_handle>=0) {
+      wakes[i]=total;
+      descriptors[total].fd=(int)items[i].wake_handle;
+      descriptors[total++].events=POLLIN;
+    }
+  }
+  if (!total) return nc_ok(error);
+  int ready=poll(descriptors,(nfds_t)total,milliseconds);
+  if (ready<0) return errno==EINTR ? nc_ok(error) : nc_system(error,errno);
+  for (int32_t i=0;i<count;i++) {
+    if (indices[i]<0) continue;
+    nc_wait_item *item=&items[i];
+    short wake=wakes[i]<0 ? 0 : descriptors[wakes[i]].revents;
+    short event=descriptors[indices[i]].revents;
+    if ((wake|event)&POLLNVAL) {
+      item->ready=1; item->kind=NC_CLOSED; item->native_code=EBADF;
+    } else if (wake) {
+      item->ready=1; item->kind=NC_CANCELLED; item->native_code=0;
+    } else if (event) {
+      /* EOF and errors wake the operation; recv/send/SO_ERROR classify them. */
+      item->ready=1; item->kind=NC_OK; item->native_code=0;
+    }
+  }
+  return nc_ok(error);
 #else
   return nc_fail(error,NC_UNSUPPORTED,0);
 #endif
@@ -389,8 +561,16 @@ int32_t net_core_os_wait_wake(intptr_t handle,int32_t writable,int32_t milliseco
   }
   return ready ? nc_ok(error) : nc_fail(error,NC_WOULD_BLOCK,0);
 #else
+#ifdef NC_EVENTS
+  nc_wait_item item={handle,wake_handle,writable,0,NC_OK,0};
+  int32_t result=net_core_os_wait_many(&item,1,milliseconds,error);
+  if (result!=NC_OK) return result;
+  if (!item.ready) return nc_fail(error,NC_WOULD_BLOCK,0);
+  return nc_fail(error,item.kind,item.native_code);
+#else
   if (wake_handle>=0) return nc_fail(error,NC_UNSUPPORTED,0);
   return net_core_os_wait(handle,writable,milliseconds,error);
+#endif
 #endif
 }
 int32_t net_core_os_wait(intptr_t handle,int32_t writable,int32_t milliseconds,nc_error *error) {

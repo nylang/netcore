@@ -182,10 +182,10 @@ func test_net_core_n3_dns_dropped_futures_do_not_cancel() {
 @test(tag = "net_core_n3")
 func test_net_core_n3_dns_startup_fd_failure_cleanup() {
   let baseline: int32 = net_core_test_fd_count();
-  AssertEqI32Msg(net_core_test_fd_exhaust_begin(), 0, "temporarily refuse new descriptors in this isolated child");
+  AssertEqI32Msg(net_core_test_fd_exhaust_begin(), 0, "enable the isolated startup resource-failure fixture");
   var result: Result<AsyncResolver, NetError> = AsyncResolver.New(2, 2);
   let restored: int32 = net_core_test_fd_exhaust_end();
-  AssertEqI32Msg(restored, 0, "restore resource limit before further assertions");
+  AssertEqI32Msg(restored, 0, "restore the resource-failure fixture before further assertions");
   AssertTrueMsg(result.IsErr(), "notification startup must fail without starting a live pool");
   net_test_fd_baseline(baseline);
 }

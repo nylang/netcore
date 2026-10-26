@@ -1,4 +1,4 @@
-/** @brief Bounded caller-thread readiness and retained-transfer driver for macOS. */
+/** @brief Bounded caller-thread readiness and retained-transfer driver for macOS, Linux, Windows, Android and iOS. */
 part of NetTransport;
 
 enum NetOperationKind {

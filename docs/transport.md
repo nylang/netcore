@@ -116,7 +116,7 @@ precedence over an expired deadline at the same observation.
 
 Every retry recomputes the remaining absolute deadline. New() tokens cap native
 waits at 50 ms for cooperative flag checks; None avoids periodic wakes.
-NewWakeable() tokens on macOS use a sticky OS wake channel without that polling
+NewWakeable() tokens on macOS, Linux and Windows use a sticky OS wake channel without that polling
 cap. Controls are checked after native waiting too. See [events.md](events.md)
 for cancellation races, resource ownership and the bounded readiness Future driver.
 Thread scheduling, clock/readiness granularity and synchronous DNS remain
