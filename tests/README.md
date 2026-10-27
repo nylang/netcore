@@ -34,7 +34,7 @@ an external cache directory. This directory is not a nested package.
 
 ## Accepted coverage
 
-The current suite has 38 cases. The complete suite and all 38 individual runtime
+The earlier N3 suite has 38 cases. The complete suite and all 38 individual runtime
 executions pass on each of macOS arm64, Linux x86_64 and Windows x86_64. Matching
 source-hash maps were checked against the final workspace sources. Local receipts:
 
@@ -74,13 +74,34 @@ work excluded. RSS is a process high-water mark, not allocated/live heap bytes.
 FD baseline recovery proves those descriptors were released in these cases; it
 does not establish the absence of heap leaks or every possible lifetime race.
 
+## Foundation boundary increment (2026-10-27)
+
+The suite now discovers 45 cases. Using the pinned public SDK 1.0.0 with source
+fallback disabled, macOS arm64 passes all 45 cases, all 45 isolated replays and
+the production native/package fixture-import gate. The seven new cases live in
+n1_foundation_selftest.ny and use the existing net_core_n3 tag so the standalone
+CI runner includes foundation checks without a second harness.
+
+Coverage includes malformed IPv4/IPv6 and numeric scope overflow; canonical
+formatting and parse/format identity; endpoint brackets, scope and port bounds;
+null/empty, negative, one-past and overflowing borrowed slices; mutable aliasing;
+deadline addition saturation and millisecond rounding/clamping; default controls,
+shared sticky cancellation and cancellation-before-timeout precedence.
+
+The [retained receipt](../docs/foundation-acceptance-2026-10-27.json) binds the
+compiler, SDK and package source hashes to this run. Full local logs are under
+cache/net-core-foundation-20261027-06/. Linux/Windows have not rerun the seven new
+cases; their accepted evidence remains the earlier 38-case suite. No additional
+mobile, real-network or fault-injection acceptance is claimed.
+
 ## Remaining acceptance
 
 - Inject failure after one worker starts, plus mutex/CV/thread creation failure.
 - Force native wait/duplicate failures and descriptor reuse while registrations
   remain pending; inject deadline expiry specifically during snapshot preparation.
 - Inject deferred connect errors reported by SO_ERROR and other native failures.
-- Broader N1 literal/byte-range boundary matrices and N2 OS resolver/interface cases.
+- Remaining N1 constructor/lifetime boundaries and cross-host replay of the seven
+  new foundation cases; N2 OS resolver/interface cases.
 - Mobile runtime behavior and cross-target published SDK artifacts.
 
 See `../ROADMAP.md` and the contracts in `../docs/`. These gaps stay open; this is

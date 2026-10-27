@@ -28,7 +28,9 @@ The desktop N3 socket/async/DNS layer passes 38 controlled behavioral cases and
 38 individual runtime replays on each of macOS arm64, Linux x86_64 and Windows
 x86_64. Android arm64/x86_64 and iOS device/Simulator arm64 pass native compile/link
 checks and O2 Nyra package precompilation; mobile runtime acceptance remains open. See [acceptance and remaining coverage](tests/README.md).
-Additional fault injection and mobile runtime acceptance remain open. HTTP
+A subsequent macOS public-SDK run passes 45 cases and 45 isolated replays after
+adding seven foundation boundary cases; Linux/Windows retain the earlier 38-case
+evidence. Additional fault injection and mobile runtime acceptance remain open. HTTP
 will live in a separate package; TLS is planned as a separate reusable layer.
 The compiler and package manager will consume public APIs; networking does not
 belong in their frontend or CodeGen.

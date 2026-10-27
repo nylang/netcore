@@ -9,8 +9,9 @@ adapters.
 net_core owns addresses, DNS, TCP/UDP, cancellation, deadlines, buffers and event
 driving through N3. HTTP will be implemented in a separate package, as requested;
 the stages below track ecosystem dependencies rather than additions to net_core.
-TLS is also proposed as a separate reusable package. Its backend selection is a
-design recommendation, not an implemented or accepted dependency.
+TLS is a separate reusable package. On 2026-10-27 the user selected OpenSSL
+as its initial backend; the independent tls package pins OpenSSL 3.5.9 LTS.
+net_core gains no OpenSSL dependency.
 
 The intended composition is HTTP over TCP for plain HTTP, or HTTP over TLS over
 TCP for HTTPS. The HTTP parser/writer must accept a transport abstraction so that
@@ -20,7 +21,8 @@ or TLS, and a plain TCP application must not have to link a TLS implementation.
 ## N1 — Values, buffers and controls
 
 Implementation complete; native semantic checking and Core/O2 precompilation
-pass on macOS arm64. Behavioral/cross-platform acceptance is pending.
+pass on macOS arm64. Seven controlled foundation boundary cases now pass on
+macOS with the public SDK; cross-platform foundation acceptance remains pending.
 
 - [x] Stable NetError categories and preserved native error codes.
 - [x] Inline IPv4/IPv6 literals, numeric scopes, endpoints and canonical formatting.
@@ -28,10 +30,14 @@ pass on macOS arm64. Behavioral/cross-platform acceptance is pending.
 - [x] Explicit monotonic deadline semantics with saturating arithmetic.
 - [x] ARC-owned atomic cancellation and per-operation options.
 - [x] Public API lifetime/allocation contracts; no exported native C ABI.
-- [ ] Behavioral coverage for malformed/boundary literals, formatting, byte views,
-      deadline overflow/rounding and shared cancellation.
+- [x] macOS behavioral coverage for malformed/boundary literals, canonical formatting,
+      byte slices, deadline overflow/rounding and shared cancellation.
+- [ ] Replay foundation boundaries on Linux/Windows and complete remaining
+      constructor/lifetime coverage.
 
-See [foundation.md](docs/foundation.md) for the implemented contract and evidence.
+See [foundation.md](docs/foundation.md) for the implemented contract and
+[2026-10-27 acceptance](docs/foundation-acceptance-2026-10-27.json) for the
+macOS 45-case suite and isolated replays (38 N3 plus seven foundation cases).
 
 ## N2 — DNS and socket substrate
 
@@ -88,7 +94,8 @@ compatibility entry). scripts/build_mobile.py handles explicit Android/iOS targe
 The runners record source/compiler
 hashes, complete-suite results, separate runtime CPU/RSS and production-fixture
 isolation. Next closure work is the explicit fault-injection matrix in
-tests/README.md; N1/N2 boundary matrices and other hosts remain separate gates.
+tests/README.md; remaining N1/N2 boundaries, new foundation-case Linux/Windows
+replays and mobile runtime remain separate gates.
 
 ## N4 — HTTP (separate package; deferred)
 
@@ -96,28 +103,22 @@ tests/README.md; N1/N2 boundary matrices and other hosts remain separate gates.
 - [ ] Streaming request/response framing, incremental parsing and bounded headers.
 - [ ] Redirect policy, body limits, connection lifecycle and error propagation.
 
-## N5 — TLS and HTTPS (separate TLS package proposal; deferred)
+## N5 — TLS and HTTPS (independent TLS package; in progress)
 
-- [ ] Select/document TLS implementation before exposing HTTPS.
-- [ ] Prefer a maintained OpenSSL backend initially, behind a private native bridge;
-      pin an upstream supported release and retain its license/security-update policy.
-      Implement no cryptographic primitives or certificate parser in net_core.
-- [ ] Keep public TLS session/config/error types independent of OpenSSL pointers,
-      native descriptors and provider error layouts.
-- [ ] Adapt bounded ciphertext BIO buffers to net_core transport; handle both read
-      and write needs during handshake/read/write/shutdown. Drain pending outbound
-      ciphertext before waiting for input; readiness direction is not determined
-      solely by the user's Read/Write call. Preserve retry buffers and offsets.
-- [ ] Certificate and hostname verification, trust-store integration and TLS errors.
-- [ ] Separate trust roots from the TLS engine. Implement and accept system trust
-      integration per platform, or require an explicitly configured CA source;
-      do not assume OpenSSL automatically uses the macOS Keychain. Unavailable
-      trust configuration must fail explicitly. SNI does not replace verification.
-- [ ] TLS 1.2/1.3 policy, ALPN, certificate limits, bounded plaintext/ciphertext queues,
-      handshake/shutdown deadlines, cancellation and authenticated close semantics.
-- [ ] Streaming HTTPS over the implemented transport layer.
-- [ ] HTTP package selects plain TCP or a TLS transport adapter; no second HTTP parser
-      or TLS-specific code is introduced into the compiler's language pipeline.
+- [x] Select OpenSSL as the initial backend (user decision, 2026-10-27).
+- [x] Implement an independent tls client-engine foundation with a private native
+      bridge, pinned 3.5.9 LTS dependency and license/security-update policy.
+- [x] Verified peer identity/explicit CA trust, bounded BIO queues, retained retry
+      storage and handshake/read/write/shutdown progress using public net_core types.
+- [x] Record macOS native and public-SDK facade acceptance for that engine increment.
+- [x] Implement the TCP/Future TLS adapter using public net_core APIs, with macOS
+      controlled stream acceptance and a native ownership-fix compiler candidate.
+- [ ] Complete remaining fault cases, compatible public SDK delivery and advertised
+      platform acceptance in [the TLS roadmap](../tls/ROADMAP.md).
+- [ ] Implement and accept platform system trust, or keep explicit CA configuration
+      required per platform. OpenSSL defaults do not imply macOS Keychain support.
+- [ ] Streaming HTTPS through the separate HTTP package, sharing its transport-independent
+      parser/writer across TCP and TLS. No HTTP/TLS implementation belongs in the compiler.
 
 ## N6 — Dependency client (consumer of the separate HTTP/TLS packages)
 

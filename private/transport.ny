@@ -12,6 +12,7 @@ part "async_resolver.ny";
 part "tcp.ny";
 part "udp.ny";
 part "../tests/n3_assert_selftest.ny";
+part "../tests/n1_foundation_selftest.ny";
 part "../tests/n3_selftest.ny";
 part "../tests/n3_transport_selftest.ny";
 part "../tests/n3_resolver_selftest.ny";

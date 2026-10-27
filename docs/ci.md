@@ -111,3 +111,12 @@ production import gate also passing. macOS/iOS and Android native build jobs
 passed and uploaded their candidates and receipts. The draft-release job was
 correctly skipped for a main-branch push. No full hosted macOS Nyra or mobile
 device runtime acceptance is implied by those native jobs.
+
+## Foundation boundary increment
+
+On 2026-10-27, the standalone desktop driver passed 45 cases and 45 isolated
+replays on macOS arm64 using the same pinned public SDK 1.0.0, including production
+fixture isolation. The seven new foundation boundary cases share the existing
+CI tag and require no workflow change. The [retained receipt](foundation-acceptance-2026-10-27.json)
+records exact source hashes. This is local evidence; the recorded hosted 38-case
+run above does not cover the new cases. Linux/Windows revalidation remains open.
