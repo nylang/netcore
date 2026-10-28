@@ -101,6 +101,13 @@ an initial selector; the lock fixes the exact commit/content. Normal compiler
 and analyzer operations do not fetch dependencies. Historical tags are immutable
 and may retain older workspace-specific manifests.
 
+
+SDK-v2 portable-lock compilation requires the SDK runtime-lock loading fix in
+newer compiler builds. The unchanged originally qualified SDK 1.0.3 bootstrap
+does not contain that follow-up. Source-only use with public SDK 1.0.2 and the
+historical prepared TLS source asset retain their documented limits; this
+manifest migration does not release a corrected compiler.
+
 For local multi-package development, list package-file pointers in a common
 `workspace.yaml`. Workspace replacements keep Git declarations shareable;
 origin lock updates deliberately disable replacements. A package entry and its
