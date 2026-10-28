@@ -1,9 +1,6 @@
 name: net_core
 version: 0.1.0
 license: MIT
-dependencies:
-  stdlib:
-    path: ../../source/stdlib
 directories:
   interface:
     - interface

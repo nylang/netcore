@@ -39,8 +39,9 @@ No libcurl dependency or compiler-specific API is part of this package.
 ## Use
 
 Declare a `net_core` dependency and import `net_core:net_core.ny`. The source
-manifest currently uses the NyraLang workspace's public stdlib at
-`../../source/stdlib`; public SDK dependency locations remain a release task.
+manifest uses implicit stdlib from the installed SDK; no NyraLang private source
+layout is required. Native networking adapters still require the documented
+platform build/link setup.
 
 ```nyra
 import "stdlib:stdlib.ny";
@@ -76,6 +77,34 @@ See [platform backends, build commands and evidence](docs/platforms.md), and
 See [CI and draft delivery](docs/ci.md) for standalone public-SDK testing, native
 mobile builds, macOS compatibility and manual acceptance, and version-tag draft
 releases. The workflows do not fetch private compiler sources.
+
+## Portable Git dependency
+
+Source imports use the installed SDK's implicit runtime packages (SDK 1.0.2 or
+later); package manifests contain no paths into the private compiler checkout.
+For automatic Git preparation use native `nyra` 1.0.3 or later. That manager's
+public SDK publication is separate from this package; SDK 1.0.2 does not ship it.
+With SDK 1.0.2, a manual clone and explicit local consumer path remain usable.
+
+Add this dependency to your application's `package.yaml`:
+
+```yaml
+dependencies:
+  net_core:
+    git: https://github.com/nylang/netcore.git
+    rev: main
+```
+
+Then run `nyra lock ./app` and commit `nyra.lock`; use
+`nyra fetch ./app --frozen` to prepare the pinned graph again. `main` above is
+an initial selector; the lock fixes the exact commit/content. Normal compiler
+and analyzer operations do not fetch dependencies. Historical tags are immutable
+and may retain older workspace-specific manifests.
+
+For local multi-package development, list package-file pointers in a common
+`workspace.yaml`. Workspace replacements keep Git declarations shareable;
+origin lock updates deliberately disable replacements. A package entry and its
+SDK can move without rewriting publisher paths.
 
 ## License
 
