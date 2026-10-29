@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 tangxiangjiang
+# SPDX-License-Identifier: MIT
+
 """Build net_core native archives for explicit Android/iOS SDK targets."""
 from __future__ import annotations
 

@@ -1,9 +1,9 @@
-/** @brief Network value/control implementation, with no socket or protocol dependencies. */
+// Copyright (c) 2026 tangxiangjiang
+// SPDX-License-Identifier: MIT
+
+/** @brief Assemble independent network value modules without resource ownership. */
 module NetFoundation;
-part "error.ny";
-part "address.ny";
-part "endpoint.ny";
-part "buffer.ny";
-part "deadline.ny";
-import "stdlib:stdlib.ny";
-import "interface/foundation.ni";
+import "private/error.ny";
+import "private/address.ny";
+import "private/buffer.ny";
+import "private/deadline.ny";

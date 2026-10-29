@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 tangxiangjiang
  * Test-only getaddrinfo interposition. Compile the OS adapter with
  * -DNET_CORE_TEST_DNS; production builds never link this file.
  */

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 tangxiangjiang
+# SPDX-License-Identifier: MIT
+
 """Run net_core CI using only this checkout and a pinned public binary SDK."""
 from __future__ import annotations
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 tangxiangjiang
+# SPDX-License-Identifier: MIT
+
 """Validate successful native CI candidates and create a GitHub draft release."""
 import argparse
 import hashlib

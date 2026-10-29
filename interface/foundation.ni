@@ -1,3 +1,6 @@
+// Copyright (c) 2026 tangxiangjiang
+// SPDX-License-Identifier: MIT
+
 /**
  * @brief Network value types, borrowed byte ranges and operation controls.
  * @note Import net_core:net_core.ny. No OS descriptors or C ABI are exported.
@@ -6,29 +9,69 @@ import "stdlib:stdlib.ny";
 
 /** @brief Stable network failure category; native codes remain on NetError. */
 pub enum NetErrorKind {
-  InvalidArgument, InvalidAddress, InvalidPort, UnsupportedFamily,
-  NameNotFound, PermissionDenied, AddressInUse, AddressUnavailable,
-  ConnectionRefused, ConnectionReset, ConnectionAborted, NotConnected,
-  NetworkUnreachable, HostUnreachable, WouldBlock, TimedOut, Cancelled,
-  Closed, MessageTooLarge, NotSupported, System, UnexpectedEof,
+  InvalidArgument,
+  InvalidAddress,
+  InvalidPort,
+  UnsupportedFamily,
+  NameNotFound,
+  PermissionDenied,
+  AddressInUse,
+  AddressUnavailable,
+  ConnectionRefused,
+  ConnectionReset,
+  ConnectionAborted,
+  NotConnected,
+  NetworkUnreachable,
+  HostUnreachable,
+  WouldBlock,
+  TimedOut,
+  Cancelled,
+  Closed,
+  MessageTooLarge,
+  NotSupported,
+  System,
+  UnexpectedEof,
 }
 
 /**
  * @brief Copyable failure payload; construction and messages allocate nothing.
  * @note native_code is zero for package validation, otherwise an OS/resolver code.
  */
-pub struct NetError { kind: NetErrorKind; native_code: int32; }
-/** @brief Stable English description, returned as an immutable global string. */
+pub struct NetError {
+  kind: NetErrorKind;
+  native_code: int32;
+}
+
+/**
+ * @brief Stable English description, returned as an immutable global string.
+ * @returns Stable English description, returned as an immutable global string.
+ */
 pub method(NetError) Message() -> string;
 
 /** @brief IP family; a default address is invalid until constructed or parsed. */
-pub enum IpFamily { Unspecified, V4, V6 }
+pub enum IpFamily {
+  Unspecified,
+  V4,
+  V6
+}
+
 /** @brief Validated IP value with inline network-order bytes and numeric scope. */
 pub struct IpAddress;
-/** @brief Construct an IPv4 address from four octets; allocates nothing. */
+
+/**
+ * @brief Construct an IPv4 address from four octets; allocates nothing.
+ * @returns The IpAddress value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub static method(IpAddress) V4(a: uint8, b: uint8, c: uint8, d: uint8) -> IpAddress;
-/** @brief Copy 16 IPv6 octets and an OS numeric interface scope; allocates nothing. */
+
+/**
+ * @brief Copy 16 IPv6 octets and an OS numeric interface scope; allocates nothing.
+ * @returns The IpAddress value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub static method(IpAddress) V6(bytes: ref <uint8>[16], scope_id: uint32) -> IpAddress;
+
 /**
  * @brief Parse strict decimal IPv4 or IPv6, including a final dotted IPv4 tail.
  * @param text Borrowed literal, without brackets, whitespace, hostname or CIDR.
@@ -36,20 +79,50 @@ pub static method(IpAddress) V6(bytes: ref <uint8>[16], scope_id: uint32) -> IpA
  * @note IPv6 accepts numeric %scope only; interface-name lookup belongs to the OS adapter.
  */
 pub static method(IpAddress) Parse(text: ref string) -> Result<IpAddress, NetError>;
-/** @brief Address family, or Unspecified for a never-initialized value. */
+
+/**
+ * @brief Address family, or Unspecified for a never-initialized value.
+ * @returns The IpFamily value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub method(IpAddress) Family() -> IpFamily;
-/** @brief Numeric IPv6 interface scope; zero for IPv4 and unscoped IPv6. */
+
+/**
+ * @brief Numeric IPv6 interface scope; zero for IPv4 and unscoped IPv6.
+ * @returns Numeric IPv6 interface scope; zero for IPv4 and unscoped IPv6.
+ */
 pub method(IpAddress) ScopeId() -> uint32;
-/** @brief Octet in network order; returns InvalidArgument outside 4/16 bytes. */
+
+/**
+ * @brief Octet in network order; returns InvalidArgument outside 4/16 bytes.
+ * @returns Ok with uint8 on success; Err with NetError on the failure paths described above.
+ */
 pub method(IpAddress) ByteAt(index: int32) -> Result<uint8, NetError>;
-/** @brief Whether this is a valid all-zero IPv4/IPv6 address. */
+
+/**
+ * @brief Whether this is a valid all-zero IPv4/IPv6 address.
+ * @returns Whether this is a valid all-zero IPv4/IPv6 address.
+ */
 pub method(IpAddress) IsUnspecified() -> bool;
-/** @brief Whether this is IPv4 127/8 or IPv6 ::1; no implicit family conversion. */
+
+/**
+ * @brief Whether this is IPv4 127/8 or IPv6 ::1; no implicit family conversion.
+ * @returns Whether this is IPv4 127/8 or IPv6 ::1; no implicit family conversion.
+ */
 pub method(IpAddress) IsLoopback() -> bool;
-/** @brief Whether this is an IPv4-mapped IPv6 value (::ffff:0:0/96). */
+
+/**
+ * @brief Whether this is an IPv4-mapped IPv6 value (::ffff:0:0/96).
+ * @returns Whether this is an IPv4-mapped IPv6 value (::ffff:0:0/96).
+ */
 pub method(IpAddress) IsV4Mapped() -> bool;
-/** @brief Compare family, address bytes and numeric scope; invalid values compare equal. */
+
+/**
+ * @brief Compare family, address bytes and numeric scope; invalid values compare equal.
+ * @returns Compare family, address bytes and numeric scope; invalid values compare equal.
+ */
 pub method(IpAddress) Equals(other: ref IpAddress) -> bool;
+
 /**
  * @brief Owned textual address; lowercase/longest-leftmost IPv6 zero compression.
  * @returns ARC-managed string, or empty for an invalid value; mapped IPv6 uses a dotted tail.
@@ -58,21 +131,45 @@ pub method(IpAddress) ToString() -> string;
 
 /** @brief IP address and host-order port; independent of native sockaddr layout. */
 pub struct NetEndpoint;
-/** @brief Combine a valid address and port (0..65535); no allocation. */
+
+/**
+ * @brief Combine a valid address and port (0..65535); no allocation.
+ * @returns Ok with NetEndpoint on success; Err with NetError on the failure paths described
+ *   above.
+ */
 pub static method(NetEndpoint) New(address: ref IpAddress, port: int32) -> Result<NetEndpoint, NetError>;
+
 /**
  * @brief Parse IPv4:port or [IPv6%scope]:port; hostnames require a resolver.
  * @returns Inline endpoint or validation failure; no allocation or retained text.
  * @note Port zero is valid for local ephemeral binding. Brackets are mandatory for IPv6.
  */
 pub static method(NetEndpoint) Parse(text: ref string) -> Result<NetEndpoint, NetError>;
-/** @brief Copy the inline IP value; no allocation. */
+
+/**
+ * @brief Copy the inline IP value; no allocation.
+ * @returns The IpAddress value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub method(NetEndpoint) Address() -> IpAddress;
-/** @brief Host-order port. */
+
+/**
+ * @brief Host-order port.
+ * @returns The uint16 value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub method(NetEndpoint) Port() -> uint16;
-/** @brief Compare address, scope and port; no allocation. */
+
+/**
+ * @brief Compare address, scope and port; no allocation.
+ * @returns Compare address, scope and port; no allocation.
+ */
 pub method(NetEndpoint) Equals(other: ref NetEndpoint) -> bool;
-/** @brief Owned endpoint text; brackets surround IPv6. Invalid values return empty. */
+
+/**
+ * @brief Owned endpoint text; brackets surround IPv6. Invalid values return empty.
+ * @returns Owned endpoint text; brackets surround IPv6. Invalid values return empty.
+ */
 pub method(NetEndpoint) ToString() -> string;
 
 /**
@@ -80,19 +177,38 @@ pub method(NetEndpoint) ToString() -> string;
  * @note The owner must outlive every use. Do not queue this view without retaining an owner.
  */
 pub struct NetBytes;
+
 /**
  * @brief Borrow readable memory; rejects negative lengths and null nonempty ranges.
  * @param data Caller guarantees at least length accessible bytes for the view's lifetime.
  * @returns Borrowed view or InvalidArgument; an empty null range is valid.
  */
 pub static method(NetBytes) FromRaw(data: *const uint8, length: intptr) -> Result<NetBytes, NetError>;
-/** @brief Borrow a string's bytes; caller keeps the string alive and unchanged. */
+
+/**
+ * @brief Borrow a string's bytes; caller keeps the string alive and unchanged.
+ * @returns The NetBytes value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub static method(NetBytes) FromString(text: ref string) -> NetBytes;
-/** @brief Borrowed address; never transfer or free it. */
+
+/**
+ * @brief Borrowed address; never transfer or free it.
+ * @returns The *const uint8 value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub method(NetBytes) Data() -> *const uint8;
-/** @brief Number of readable bytes. */
+
+/**
+ * @brief Number of readable bytes.
+ * @returns Number of readable bytes.
+ */
 pub method(NetBytes) Len() -> intptr;
-/** @brief Borrow a checked subrange; validates with subtraction to avoid overflow. */
+
+/**
+ * @brief Borrow a checked subrange; validates with subtraction to avoid overflow.
+ * @returns Ok with NetBytes on success; Err with NetError on the failure paths described above.
+ */
 pub method(NetBytes) Slice(start: intptr, length: intptr) -> Result<NetBytes, NetError>;
 
 /**
@@ -100,15 +216,42 @@ pub method(NetBytes) Slice(start: intptr, length: intptr) -> Result<NetBytes, Ne
  * @note Caller prevents concurrent/overlapping mutation and keeps the owner alive.
  */
 pub struct NetMutableBytes;
-/** @brief Borrow writable memory under the same bounds/lifetime contract as NetBytes.FromRaw. */
-pub static method(NetMutableBytes) FromRaw(data: *mut uint8, length: intptr) -> Result<NetMutableBytes, NetError>;
-/** @brief Borrowed writable address; never transfer or free it. */
+
+/**
+ * @brief Borrow writable memory under the same bounds/lifetime contract as NetBytes.FromRaw.
+ * @returns Ok with NetMutableBytes on success; Err with NetError on the failure paths described
+ *   above.
+ */
+pub static method(NetMutableBytes) FromRaw(
+  data: *mut uint8,
+  length: intptr
+) -> Result<NetMutableBytes, NetError>;
+
+/**
+ * @brief Borrowed writable address; never transfer or free it.
+ * @returns The *mut uint8 value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub method(NetMutableBytes) Data() -> *mut uint8;
-/** @brief Number of writable bytes. */
+
+/**
+ * @brief Number of writable bytes.
+ * @returns Number of writable bytes.
+ */
 pub method(NetMutableBytes) Len() -> intptr;
-/** @brief Borrow a checked subrange; caller preserves exclusive mutation. */
+
+/**
+ * @brief Borrow a checked subrange; caller preserves exclusive mutation.
+ * @returns Ok with NetMutableBytes on success; Err with NetError on the failure paths described
+ *   above.
+ */
 pub method(NetMutableBytes) Slice(start: intptr, length: intptr) -> Result<NetMutableBytes, NetError>;
-/** @brief Read-only view of the same memory; does not extend its lifetime. */
+
+/**
+ * @brief Read-only view of the same memory; does not extend its lifetime.
+ * @returns The NetBytes value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub method(NetMutableBytes) AsReadOnly() -> NetBytes;
 
 /**
@@ -116,19 +259,52 @@ pub method(NetMutableBytes) AsReadOnly() -> NetBytes;
  * @note All calls must use the same clock origin. No wall clock or global clock is read.
  */
 pub struct NetDeadline;
-/** @brief Unlimited deadline; no allocation. */
+
+/**
+ * @brief Unlimited deadline; no allocation.
+ * @returns The NetDeadline value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub static method(NetDeadline) Never() -> NetDeadline;
-/** @brief Finite absolute monotonic deadline; zero expires at monotonic zero. */
+
+/**
+ * @brief Finite absolute monotonic deadline; zero expires at monotonic zero.
+ * @returns The NetDeadline value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub static method(NetDeadline) At(nanoseconds: uint64) -> NetDeadline;
-/** @brief Add timeout to now with saturation at uint64 max; zero expires immediately. */
+
+/**
+ * @brief Add timeout to now with saturation at uint64 max; zero expires immediately.
+ * @returns The NetDeadline value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub static method(NetDeadline) After(now_ns: uint64, timeout_ns: uint64) -> NetDeadline;
-/** @brief Whether a finite deadline exists (including an already expired deadline). */
+
+/**
+ * @brief Whether a finite deadline exists (including an already expired deadline).
+ * @returns Whether a finite deadline exists (including an already expired deadline).
+ */
 pub method(NetDeadline) IsFinite() -> bool;
-/** @brief Whether a finite deadline is at or before now_ns. */
+
+/**
+ * @brief Whether a finite deadline is at or before now_ns.
+ * @returns Whether a finite deadline is at or before now_ns.
+ */
 pub method(NetDeadline) IsExpired(now_ns: uint64) -> bool;
-/** @brief Remaining nanoseconds, zero if expired, uint64 max if unlimited. */
+
+/**
+ * @brief Remaining nanoseconds, zero if expired, uint64 max if unlimited.
+ * @returns Remaining nanoseconds, zero if expired, uint64 max if unlimited.
+ */
 pub method(NetDeadline) RemainingNanoseconds(now_ns: uint64) -> uint64;
-/** @brief OS wait budget: -1 unlimited, 0 expired, otherwise ceil milliseconds clamped to int32 max. */
+
+/**
+ * @brief OS wait budget: -1 unlimited, 0 expired, otherwise ceil milliseconds clamped to int32
+ *   max.
+ * @returns OS wait budget: -1 unlimited, 0 expired, otherwise ceil milliseconds clamped to int32
+ *   max.
+ */
 pub method(NetDeadline) PollMilliseconds(now_ns: uint64) -> int32;
 
 /**
@@ -136,29 +312,60 @@ pub method(NetDeadline) PollMilliseconds(now_ns: uint64) -> int32;
  * @note No reset or callbacks. New is flag-only; NewWakeable owns an OS wake channel.
  */
 pub struct NetCancellation;
-/** @brief Allocate one shared atomic cancellation cell, initially not cancelled. */
+
+/**
+ * @brief Allocate one shared atomic cancellation cell, initially not cancelled.
+ * @returns The NetCancellation value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub static method(NetCancellation) New() -> NetCancellation;
+
 /**
  * @brief Allocate an OS-backed token shared by copies; last drop closes its wake channel.
  * @returns Token, OS resource failure, or NotSupported on other hosts; never silently polls.
  * @note Cancel wakes all current/future readiness waits without periodic polling.
  */
 pub static method(NetCancellation) NewWakeable() -> Result<NetCancellation, NetError>;
-/** @brief Whether cancellation can wake native waits; false for New/None tokens. */
+
+/**
+ * @brief Whether cancellation can wake native waits; false for New/None tokens.
+ * @returns Whether cancellation can wake native waits; false for New/None tokens.
+ */
 pub method(NetCancellation) CanWakeWaiters() -> bool;
-/** @brief Allocation-free token that cannot be cancelled; also the default value. */
+
+/**
+ * @brief Allocation-free token that cannot be cancelled; also the default value.
+ * @returns The NetCancellation value described above, retaining the documented ownership and
+ *   default-state semantics.
+ */
 pub static method(NetCancellation) None() -> NetCancellation;
-/** @brief Whether this token owns a cancellation cell (even before it is cancelled). */
+
+/**
+ * @brief Whether this token owns a cancellation cell (even before it is cancelled).
+ * @returns Whether this token owns a cancellation cell (even before it is cancelled).
+ */
 pub method(NetCancellation) CanBeCancelled() -> bool;
+
 /** @brief Publish cancellation with release ordering; None is a no-op. */
 pub method(NetCancellation) Cancel() -> void;
-/** @brief Observe cancellation with acquire ordering; None returns false. */
+
+/**
+ * @brief Observe cancellation with acquire ordering; None returns false.
+ * @returns Observe cancellation with acquire ordering; None returns false.
+ */
 pub method(NetCancellation) IsCancelled() -> bool;
 
 /**
  * @brief Per-operation deadline and cancellation; default means no limit/cancellation.
  * @note Owned token retains its cell. The operation must supply monotonic now_ns.
  */
-pub struct NetOperationOptions { deadline: NetDeadline; cancellation: NetCancellation; }
-/** @brief Check cancellation first, then deadline; returns Ok(Unit), Cancelled or TimedOut. */
+pub struct NetOperationOptions {
+  deadline: NetDeadline;
+  cancellation: NetCancellation;
+}
+
+/**
+ * @brief Check cancellation first, then deadline; returns Ok(Unit), Cancelled or TimedOut.
+ * @returns Ok with Unit on success; Err with NetError on the failure paths described above.
+ */
 pub method(NetOperationOptions) Check(now_ns: uint64) -> Result<Unit, NetError>;

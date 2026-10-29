@@ -97,11 +97,27 @@ isolation. Next closure work is the explicit fault-injection matrix in
 tests/README.md; remaining N1/N2 boundaries, new foundation-case Linux/Windows
 replays and mobile runtime remain separate gates.
 
-## N4 — HTTP (separate package; deferred)
+## N4 — HTTP (separate package; in progress)
 
-- [ ] Separate package with transport-independent protocol parsing/writing.
-- [ ] Streaming request/response framing, incremental parsing and bounded headers.
-- [ ] Redirect policy, body limits, connection lifecycle and error propagation.
+- [x] Separate local http package with transport-independent head parsing/writing.
+- [x] Incremental request/response heads, bounded headers and strict framing plans;
+      see [HTTP H1 acceptance](../http/docs/head-acceptance-2026-10-27.json).
+- [x] Streaming fixed/chunked/EOF body decoding, bounded extensions/trailers and
+      body/framing limits; see [body acceptance](../http/docs/body-acceptance-2026-10-27.json).
+- [x] Streaming body writing and bounded informational/final response sequencing;
+      see [framing acceptance](../http/docs/framing-acceptance-2026-10-27.json).
+- [x] H3a connected single-request TCP client, bounded immutable upload/streamed
+      response, controls, body limits, typed progress/errors and explicit retirement;
+      see [client acceptance](../http/docs/client-acceptance-2026-10-27.json).
+- [x] H3b absolute URL normalization and generated request association, explicit
+      bounded DNS/notifications, numeric bypass and sequential dial under original
+      controls; [URL acceptance](../http/docs/url-acceptance-2026-10-27.json) records
+      67 core cases/replays, 62 live and 20 controlled failures per desktop host.
+- [x] H3c URI-reference resolution, bounded explicit redirect/replay coordinator,
+      immutable request snapshots and permanent cross-origin field filtering;
+      [redirect acceptance](../http/docs/redirect-acceptance-2026-10-27.json) records
+      76 core cases/replays, the prior 82 network/control and 25 multi-hop cases per host.
+- [ ] Automatic/mixed-transport following, IDNA and connection pooling/reuse.
 
 ## N5 — TLS and HTTPS (independent TLS package; in progress)
 
@@ -117,8 +133,13 @@ replays and mobile runtime remain separate gates.
       platform acceptance in [the TLS roadmap](../tls/ROADMAP.md).
 - [ ] Implement and accept platform system trust, or keep explicit CA configuration
       required per platform. OpenSSL defaults do not imply macOS Keychain support.
-- [ ] Streaming HTTPS through the separate HTTP package, sharing its transport-independent
-      parser/writer across TCP and TLS. No HTTP/TLS implementation belongs in the compiler.
+- [x] Connected single-request HTTPS through the optional sibling http_tls package,
+      sharing the HTTP exchange, verified Host/peer identity, ALPN and authenticated
+      EOF rules; 29 loopback scenarios pass per accepted desktop host.
+- [x] HTTPS URL Open derives routing and certificate identity from one validated
+      URL and shares DNS/connect/handshake/body/shutdown controls.
+- [ ] Complete automatic/mixed-transport following, pooling and delivery.
+      No HTTP/TLS implementation belongs in the compiler.
 
 ## N6 — Dependency client (consumer of the separate HTTP/TLS packages)
 

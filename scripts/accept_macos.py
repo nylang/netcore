@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 tangxiangjiang
+# SPDX-License-Identifier: MIT
+
 """Compatibility entry for the original macOS N3 acceptance command."""
 import platform
 from accept import main

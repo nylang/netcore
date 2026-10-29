@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 tangxiangjiang
  * Private ABI only. No sockaddr, errno constants or native handles enter the Nyra product face.
  */
 #ifndef NET_CORE_OS_H

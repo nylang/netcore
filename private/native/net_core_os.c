@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 tangxiangjiang
  * Thin BSD sockets/WinSock adapter. Protocols and operation policy stay in Nyra.
  */
 #ifndef _GNU_SOURCE

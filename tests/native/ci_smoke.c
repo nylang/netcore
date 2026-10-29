@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 tangxiangjiang
  * Host-native checks for runners unable to execute the Nyra SDK binary. */
 #include <stdint.h>
 #include <stdio.h>
