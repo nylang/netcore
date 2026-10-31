@@ -83,11 +83,11 @@ releases. The workflows do not fetch private compiler sources.
 
 ## Portable Git dependency
 
-Source imports use the installed SDK's implicit runtime packages (SDK 1.0.2 or
-later); package manifests contain no paths into the private compiler checkout.
-For automatic Git preparation use native `nyra` 1.0.3 or later. That manager's
-public SDK publication is separate from this package; SDK 1.0.2 does not ship it.
-With SDK 1.0.2, a manual clone and explicit local consumer path remain usable.
+This working API requires matching Nyra SDK 1.0.5 compiler, runtime and analyzer
+capabilities. Its manifest uses implicit SDK packages and contains no paths into
+the private compiler checkout. Use the SDK's native `nyra` for Git preparation.
+Older source tags retain their documented SDK requirements; they do not qualify
+this development API. SDK/package publication remains a separate operation.
 
 Add this dependency to your application's `package.yaml`:
 
@@ -95,21 +95,14 @@ Add this dependency to your application's `package.yaml`:
 dependencies:
   net_core:
     git: https://github.com/nylang/netcore.git
-    rev: main
+    rev: 8b7e6a06bf0cfcc772d952cd5a82f4321981edd2
 ```
 
-Then run `nyra lock ./app` and commit `nyra.lock`; use
-`nyra fetch ./app --frozen` to prepare the pinned graph again. `main` above is
-an initial selector; the lock fixes the exact commit/content. Normal compiler
-and analyzer operations do not fetch dependencies. Historical tags are immutable
-and may retain older workspace-specific manifests.
-
-
-SDK-v2 portable-lock compilation requires the SDK runtime-lock loading fix in
-newer compiler builds. The unchanged originally qualified SDK 1.0.3 bootstrap
-does not contain that follow-up. Source-only use with public SDK 1.0.2 and the
-historical prepared TLS source asset retain their documented limits; this
-manifest migration does not release a corrected compiler.
+Run `nyra lock ./app` and commit `nyra.lock`; use
+`nyra fetch ./app --frozen` to prepare the same graph again. The example pins
+an existing public development commit whose API matches this source. It does
+not select the older stable `main` or claim a newly published package tag.
+Normal compiler and analyzer operations do not fetch dependencies.
 
 For local multi-package development, list package-file pointers in a common
 `workspace.yaml`. Workspace replacements keep Git declarations shareable;
@@ -130,8 +123,8 @@ See [module responsibilities, ownership and dependency boundaries](ARCHITECTURE.
 1.0.5 P7 analyzer candidate (or a later SDK containing those rules); the
 published 1.0.4 analyzer does not implement them. `import: default` inherits
 the selected workspace profile when present, otherwise analyzer SDK defaults.
-No sibling source path is required. Run `nyra-analyzer lint . --json`. Existing
-violations remain migration debt; lint success is not runtime qualification.
+No sibling source path is required. Run `nyra-analyzer lint . --json`. Lint checks
+coding rules; runtime qualification is a separate gate.
 
 
 The 1.0.5 source ownership migration requires matched 1.0.5 stdlib/kernel source
