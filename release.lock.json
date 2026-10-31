@@ -3,6 +3,23 @@
   "version": "0.2.0",
   "sdk": {
     "version": "1.0.5",
-    "hosts": {}
+    "hosts": {
+      "darwin-arm64": {
+        "archive_sha256": "3ab9b0c03a6fc56af9c4db5386fae361987b099e365b4319f655dc12e106dc26",
+        "manifest_sha256": "56e857f03b3932df4d39d0811440d170868685fd8f91c1a310397d5998c487c6"
+      },
+      "darwin-x86_64": {
+        "archive_sha256": "6c97b5c6cc73a50d99fa2c591eae2382cb28fe5b978af2f8d4463b9d805aef8d",
+        "manifest_sha256": "382a1edd456a2245c26030cf1214d8e31bc0058896048a44eb44597b9aa6d4d1"
+      },
+      "linux-x86_64": {
+        "archive_sha256": "897bca18939c910ac071c3c9e42353a765e7114f65fd690781d1357c6abd6a51",
+        "manifest_sha256": "44a68b4db8c7cdcdf13a6c2ebf0ba1c853baf7bfc81cad75e0a5815278c51c17"
+      },
+      "windows-x86_64": {
+        "archive_sha256": "c74d3e4d67078024f4c74ad1c4514be6bd4783e4d923bd4e6922bb8d1cc82436",
+        "manifest_sha256": "9c697e4014c36e1e10ed4add3427080c71b9e54b909a30e2d93d13cfb0abb8c0"
+      }
+    }
   }
 }
