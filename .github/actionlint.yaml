@@ -1,3 +1,0 @@
-self-hosted-runner:
-  labels:
-    - nyra-sdk-1.0
