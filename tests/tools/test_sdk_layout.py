@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
-from sdk_layout import sdk_package
+from sdk_layout import sdk_package, sdk_entry
 
 
 class SDKLayoutTests(unittest.TestCase):
@@ -68,6 +68,27 @@ class SDKLayoutTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 sdk_package(self.sdk, self.host, 'stdlib')
 
+
+    def test_dependency_uses_inventory_entry_instead_of_target_directory(self):
+        self.fixture('packages/stdlib/targets/linux-x86_64')
+        entry = self.sdk / 'packages/stdlib/package.yaml'
+        entry.write_text('name: stdlib\nprecompiled: manifest.yaml\n')
+        self.metadata['targets'][0]['packages'][0]['entry'] = 'packages/stdlib/package.yaml'
+        self.save()
+        self.assertEqual(sdk_entry(self.sdk, self.host, 'stdlib'), entry)
+        moved = self.root / 'moved SDK'
+        self.sdk.rename(moved)
+        self.assertEqual(sdk_entry(moved, self.host, 'stdlib'), moved / 'packages/stdlib/package.yaml')
+
+    def test_missing_escaped_or_target_directory_dependency_entry_rejected(self):
+        self.fixture('packages/stdlib/targets/linux-x86_64')
+        row = self.metadata['targets'][0]['packages'][0]
+        for entry in ('', '../package.yaml', '/package.yaml', 'C:/package.yaml',
+                      'packages/stdlib/targets/linux-x86_64', 'missing/package.yaml'):
+            row['entry'] = entry
+            self.save()
+            with self.assertRaises(ValueError):
+                sdk_entry(self.sdk, self.host, 'stdlib')
 
 if __name__ == '__main__':
     unittest.main()

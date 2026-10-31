@@ -19,7 +19,7 @@ import tarfile
 import urllib.request
 import zipfile
 
-from sdk_layout import sdk_package
+from sdk_layout import sdk_package, sdk_entry
 PACKAGE = Path(__file__).resolve().parents[1]
 SDK_LOCK = json.loads((PACKAGE / "release.lock.json").read_text())["sdk"]
 SDK_VERSION = SDK_LOCK["version"]
@@ -88,12 +88,12 @@ def obtain_sdk(output: Path, host: str, supplied: Path | None) -> Path:
     return sdk
 
 
-def stage_manifest(project: Path, stdlib: Path, version: str) -> None:
+def stage_manifest(project: Path, stdlib: Path, entry: Path, version: str) -> None:
     if not (stdlib / "manifest.yaml").is_file():
         raise ValueError("missing precompiled SDK stdlib: " + str(stdlib))
     (project / "package.yaml").write_text(
         "name: net_core\nversion: " + version + "\nlicense: MIT\ndependencies:\n  stdlib:\n    precompiled: "
-        + json.dumps(str(stdlib)) + "\ndirectories:\n  interface:\n    - interface\n  public:\n    - public\n  private:\n    - private\n    - tests\n", encoding="utf-8")
+        + json.dumps(str(entry)) + "\ndirectories:\n  interface:\n    - interface\n  public:\n    - public\n  private:\n    - private\n    - tests\n", encoding="utf-8")
 
 
 def candidate(native: Path, output: Path, version: str, target: str) -> None:
@@ -159,7 +159,7 @@ def main() -> int:
             if host.startswith("darwin-"):
                 environment["SDKROOT"] = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
             stdlib = sdk_package(sdk, host, 'stdlib')
-            stage_manifest(project, stdlib, version)
+            stage_manifest(project, stdlib, sdk_entry(sdk, host, 'stdlib'), version)
             report["sdk"] = {"version": SDK_VERSION, "manifest_sha256": digest(sdk / "manifest.json"), "source_fallback_disabled": True}
             run([sys.executable, str(project / "scripts/accept.py"), "--compiler", str(compiler),
                  "--platform-archive", str(stdlib / "lib/libnyra_platform.a"), "--timeout", "600",
