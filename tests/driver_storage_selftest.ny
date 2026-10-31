@@ -6,7 +6,7 @@ part of NetSocketDriver;
 @test(tag = "net_core_n3")
 func test_net_core_n3_large_transfer_is_bounded_and_exact() {
   let options: NetOperationOptions = NetOperationOptions{
-    deadline: NetDeadline.After(NetClock.NowNanoseconds(), 3000000000u64)
+    deadline: NetDeadline.After(Instant.Now().ToDurationSinceEpochish().ToNanoseconds(), 3000000000u64)
   };
   var made: Result<NetEventLoop, NetError> = NetEventLoop.New(4);
   AssertTrue(made.IsOk());

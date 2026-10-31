@@ -86,13 +86,13 @@ pub static method(Resolver) Resolve(
     host.data as *const uint8,
     host.length as intptr,
     port,
-    NetNativeFamily(family),
+    (family).NativeDiscriminator(),
     &mut records[0],
     max_results,
     &mut count,
     &mut error
   ) != 0 {
-    return NetMapNativeError(error);
+    return (error).AsProduct();
   }
 
   output.Reset();
@@ -100,7 +100,7 @@ pub static method(Resolver) Resolve(
   i = 0;
   while i<count {
     let record: NetNativeAddress = records[i];
-    output.Push(NetProductEndpoint(record));
+    output.Push((record).AsProduct());
     i = i + 1;
   }
 
@@ -115,7 +115,7 @@ pub static method(Resolver) InterfaceIndex(name: ref string) -> Result<uint32, N
   var value: uint32 = 0;
   var error: NetNativeError = NetNativeError{};
   if net_core_os_scope(name.data as *const uint8, name.length as intptr, &mut value, &mut error) != 0 {
-    return NetMapNativeError(error);
+    return (error).AsProduct();
   }
 
   return value;

@@ -86,10 +86,10 @@ method(NetResolverPool) operator drop() -> void {
   }
 }
 
-func net_resolver_is_closed(pool: arc<NetResolverPool>) -> bool {
-  pool.mutex.Lock();
-  let closed: bool = pool.closed;
-  pool.mutex.Unlock();
+method(NetResolverPool) IsClosed() -> bool {
+  self.mutex.Lock();
+  let closed: bool = self.closed;
+  self.mutex.Unlock();
 
   return closed;
 }
@@ -99,14 +99,14 @@ func net_resolver_is_closed(pool: arc<NetResolverPool>) -> bool {
 // A previously published cancellation must not cause perpetual ready notifications
 
 // while its physical OS lookup still occupies a slot.
-func net_resolver_wait_state(pool: arc<NetResolverPool>, now: uint64) -> NetReadinessState {
+method(NetResolverPool) Readiness(now: uint64) -> NetReadinessState {
   var state: NetReadinessState = NetReadinessState{};
   var occupied: bool = false;
-  pool.mutex.Lock();
-  state.closed = pool.closed;
+  self.mutex.Lock();
+  state.closed = self.closed;
   var i: int32 = 0;
-  while i < pool.slots.Len() && !state.closed {
-    let optional: arc<NetResolveCell>? = pool.slots.Get(i);
+  while i < self.slots.Len() && !state.closed {
+    let optional: arc<NetResolveCell>? = self.slots.Get(i);
     if optional != nil {
       occupied = true;
       var cell: arc<NetResolveCell> = optional as arc<NetResolveCell>;
@@ -135,7 +135,7 @@ func net_resolver_wait_state(pool: arc<NetResolverPool>, now: uint64) -> NetRead
     i = i + 1;
   }
 
-  pool.mutex.Unlock();
+  self.mutex.Unlock();
   if !occupied {
     state.ready = true;
   }
@@ -164,22 +164,22 @@ pub struct AsyncResolver {
 }
 
 // A running resolver remains charged to its bounded pool until the native lookup actually returns.
-func net_resolve_worker(pool: arc<NetResolverPool>) -> void {
+method(NetResolverPool) RunWorker() -> void {
   while true {
     var selected: arc<NetResolveCell>? = nil;
-    pool.mutex.Lock();
-    while selected == nil && !pool.closed {
-      let count: int32 = pool.slots.Len();
+    self.mutex.Lock();
+    while selected == nil && !self.closed {
+      let count: int32 = self.slots.Len();
       var scanned: int32 = 0;
       while scanned < count {
-        let index: int32 = (pool.cursor + scanned) % count;
-        let optional: arc<NetResolveCell>? = pool.slots.Get(index);
+        let index: int32 = (self.cursor + scanned) % count;
+        let optional: arc<NetResolveCell>? = self.slots.Get(index);
         if optional != nil {
           var cell: arc<NetResolveCell> = optional as arc<NetResolveCell>;
           if !cell.claimed {
             cell.claimed = true;
             selected = cell;
-            pool.cursor = (index + 1) % count;
+            self.cursor = (index + 1) % count;
             break;
           }
         }
@@ -188,19 +188,19 @@ func net_resolve_worker(pool: arc<NetResolverPool>) -> void {
       }
 
       if selected == nil {
-        pool.changed.Wait(pool.mutex);
+        self.changed.Wait(self.mutex);
       }
     }
 
-    let closed: bool = pool.closed;
-    pool.mutex.Unlock();
+    let closed: bool = self.closed;
+    self.mutex.Unlock();
     if closed {
       return;
     }
 
     var cell: arc<NetResolveCell> = selected as arc<NetResolveCell>;
     var result: NetResolution = NetResolution{};
-    let checked: Result<Unit, NetError> = NetCheckOperation(cell.options);
+    let checked: Result<Unit, NetError> = (cell.options).CheckNow();
     let control_failure: NetError? = checked.get_if<NetError>();
     if control_failure != nil {
       result.error = control_failure;
@@ -235,31 +235,31 @@ func net_resolve_worker(pool: arc<NetResolverPool>) -> void {
     cell.result = result;
     cell.done.Store(1, MemoryOrder.Release);
     // Do not mutate cell state after release publication, even when Close raced DNS.
-    if pool.wake_live {
-      net_core_os_wake_signal(pool.wake_write);
+    if self.wake_live {
+      net_core_os_wake_signal(self.wake_write);
     }
   }
 }
 
-func net_resolver_stop(pool: arc<NetResolverPool>) -> void {
-  pool.mutex.Lock();
-  pool.closed = true;
+method(NetResolverPool) Stop() -> void {
+  self.mutex.Lock();
+  self.closed = true;
   var i: int32 = 0;
-  while i < pool.slots.Len() {
-    let optional: arc<NetResolveCell>? = pool.slots.Get(i);
+  while i < self.slots.Len() {
+    let optional: arc<NetResolveCell>? = self.slots.Get(i);
     if optional != nil {
       var cell: arc<NetResolveCell> = optional as arc<NetResolveCell>;
       cell.skip.Store(1, MemoryOrder.Release);
     }
 
-    pool.slots.Set(i, nil);
+    self.slots.Set(i, nil);
     i = i + 1;
   }
 
-  pool.changed.NotifyAll();
-  pool.mutex.Unlock();
-  if pool.wake_live {
-    net_core_os_wake_signal(pool.wake_write);
+  self.changed.NotifyAll();
+  self.mutex.Unlock();
+  if self.wake_live {
+    net_core_os_wake_signal(self.wake_write);
   }
 }
 
@@ -302,11 +302,11 @@ pub static method(AsyncResolver) New(
   }
 
   if net_core_os_events_supported() != 0 {
-    var read_handle: intptr = 0 as intptr;
-    var write_handle: intptr = 0 as intptr;
+    var read_handle: intptr = 0;
+    var write_handle: intptr = 0;
     var error: NetNativeError = NetNativeError{};
     if net_core_os_wake_open(&mut read_handle, &mut write_handle, &mut error) != 0 {
-      return NetMapNativeError(error);
+      return (error).AsProduct();
     }
 
     pool.wake_read = read_handle;
@@ -318,11 +318,11 @@ pub static method(AsyncResolver) New(
   while i < worker_count {
     let started: Result<Thread, ThreadError> = Thread.Spawn(
       lambda[copy pool]() -> void {
-        net_resolve_worker(pool);
+        (pool).RunWorker();
       }
     );
     if started.IsErr() {
-      net_resolver_stop(pool);
+      (pool).Stop();
 
       return NetError{kind: NetErrorKind.System};
     }
@@ -379,7 +379,7 @@ pub method(AsyncResolver) WhenReady(
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<Result<Unit, NetError>>, NetError> {
   let optional: arc<NetResolverPool>? = self.pool;
-  if optional == nil || !NetLoopIsOpen(driver) {
+  if optional == nil || !(driver).IsOpen() {
     return NetError{kind: NetErrorKind.Closed};
   }
 
@@ -392,14 +392,11 @@ pub method(AsyncResolver) WhenReady(
     return NetError{kind: NetErrorKind.WouldBlock};
   }
 
-  return NetRegisterResolverReady(
-    driver,
-    pool.wake_read,
+  return (driver).RegisterResolverReady(pool.wake_read,
     options,
     lambda[copy pool](now: uint64) -> NetReadinessState {
-      return net_resolver_wait_state(pool, now);
-    }
-  );
+      return (pool).Readiness(now);
+    });
 }
 
 /**
@@ -442,7 +439,7 @@ pub method(AsyncResolver) ResolveAsync(
     i = i + 1;
   }
 
-  let checked: Result<Unit, NetError> = NetCheckOperation(options);
+  let checked: Result<Unit, NetError> = (options).CheckNow();
   let failure: NetError? = checked.get_if<NetError>();
   if failure != nil {
     return failure as NetError;
@@ -503,7 +500,7 @@ pub method(AsyncResolver) Poll() -> Result<int32, NetError> {
   if pool.wake_live {
     var error: NetNativeError = NetNativeError{};
     if net_core_os_notify_drain(pool.wake_read, &mut error) != 0 {
-      return NetMapNativeError(error);
+      return (error).AsProduct();
     }
   }
 
@@ -515,7 +512,7 @@ pub method(AsyncResolver) Poll() -> Result<int32, NetError> {
     var cell: arc<NetResolveCell> = entry.cell;
     var done: bool = cell.done.Load(MemoryOrder.Acquire) != 0;
     if !entry.published {
-      let checked: Result<Unit, NetError> = NetCheckOperation(entry.options);
+      let checked: Result<Unit, NetError> = (entry.options).CheckNow();
       let failure: NetError? = checked.get_if<NetError>();
       if failure != nil || done {
         var result: NetResolution = NetResolution{};
@@ -582,7 +579,7 @@ pub method(AsyncResolver) Close() -> void {
   self.pool = nil;
   var detached: FastArray<NetResolvePending> = move(self.pending);
   var pool: arc<NetResolverPool> = optional as arc<NetResolverPool>;
-  net_resolver_stop(pool);
+  (pool).Stop();
   var i: int32 = 0;
   while i < detached.Len() {
     var entry: NetResolvePending = detached.Get(i);

@@ -1,5 +1,8 @@
 # net_core
 
+Development API 0.2.0 requires a matching Nyra SDK 1.0.5 or newer.
+Rebuild precompiled consumers against the matching interfaces and runtime.
+
 [![Network CI](https://github.com/nylang/netcore/actions/workflows/ci.yml/badge.svg)](https://github.com/nylang/netcore/actions/workflows/ci.yml)
 
 Independent Nyra networking foundation. The current implementation provides:
@@ -120,3 +123,18 @@ Licensed under the [MIT License](LICENSE).
 ## Module architecture
 
 See [module responsibilities, ownership and dependency boundaries](ARCHITECTURE.md).
+
+## Coding-rule lint
+
+`package.yaml` selects the portable `lint.yaml` profile. It requires the
+1.0.5 P7 analyzer candidate (or a later SDK containing those rules); the
+published 1.0.4 analyzer does not implement them. `import: default` inherits
+the selected workspace profile when present, otherwise analyzer SDK defaults.
+No sibling source path is required. Run `nyra-analyzer lint . --json`. Existing
+violations remain migration debt; lint success is not runtime qualification.
+
+
+The 1.0.5 source ownership migration requires matched 1.0.5 stdlib/kernel source
+for primitive integer formatting. It removes private procedural bridge/queue
+aliases; public address/socket APIs retain their existing contracts. Native C
+symbols are unchanged. This working tree is not a published package tag.

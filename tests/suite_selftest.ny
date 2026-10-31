@@ -8,6 +8,7 @@ part "n3_selftest.ny";
 part "n3_transport_selftest.ny";
 part "n3_resolver_selftest.ny";
 import "stdlib:stdlib.ny";
+import "ntest:ntest.ny";
 import "interface/foundation.ni";
 import "interface/transport.ni";
 import "interface/async_transport.ni";

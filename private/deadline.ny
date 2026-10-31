@@ -43,7 +43,7 @@ pub static method(NetDeadline) At(nanoseconds: uint64) -> NetDeadline {
  *   default-state semantics.
  */
 pub static method(NetDeadline) After(now_ns: uint64, timeout_ns: uint64) -> NetDeadline {
-  let limit: uint64 = ~(0 as uint64);
+  let limit: uint64 = ~(0u64);
   if timeout_ns > limit - now_ns {
     return NetDeadline{finite: true, expires_ns: limit};
   }
@@ -73,11 +73,11 @@ pub method(NetDeadline) IsExpired(now_ns: uint64) -> bool {
  */
 pub method(NetDeadline) RemainingNanoseconds(now_ns: uint64) -> uint64 {
   if !self.finite {
-    return ~(0 as uint64);
+    return ~(0u64);
   }
 
   if now_ns >= self.expires_ns {
-    return 0 as uint64;
+    return 0u64;
   }
 
   return self.expires_ns - now_ns;
@@ -99,12 +99,12 @@ pub method(NetDeadline) PollMilliseconds(now_ns: uint64) -> int32 {
   }
 
   let remaining: uint64 = self.expires_ns - now_ns;
-  var milliseconds: uint64 = remaining / (1000000 as uint64);
-  if remaining % (1000000 as uint64) != 0 {
-    milliseconds = milliseconds + (1 as uint64);
+  var milliseconds: uint64 = remaining / (1000000u64);
+  if remaining % (1000000u64) != 0 {
+    milliseconds = milliseconds + (1u64);
   }
 
-  if milliseconds >(2147483647 as uint64) {
+  if milliseconds >(2147483647u64) {
     return 2147483647;
   }
 

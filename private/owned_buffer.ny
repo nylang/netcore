@@ -22,7 +22,7 @@ pub struct NetBuffer {
  * @brief Allocate zero-initialized storage retained by a network payload owner.
  * @returns An empty buffer for nonpositive size, otherwise a buffer owning size bytes.
  */
-pub func NetBufferAllocate(size: int32) -> NetBuffer {
+pub static method(NetBuffer) Allocate(size: int32) -> NetBuffer {
   if size == 0 {
     return NetBuffer{};
   }
@@ -39,15 +39,15 @@ pub func NetBufferAllocate(size: int32) -> NetBuffer {
  * @returns A pointer at the requested offset, or null for an empty owner. Keep the buffer alive
  *   and validate the range before using it.
  */
-pub func NetBufferPointer(buffer: ref NetBuffer, offset: intptr) -> *mut uint8 {
-  let optional: arc<owned <uint8>[]>? = buffer.storage;
+pub method(NetBuffer) MutablePointer(offset: intptr) -> *mut uint8 {
+  let optional: arc<owned <uint8>[]>? = self.storage;
   if optional == nil {
     return 0 as *mut uint8;
   }
 
   var storage: arc<owned <uint8>[]> = optional as arc<owned <uint8>[]>;
   unsafe {
-    return (((&mut storage[0]) as intptr) + buffer.start + offset) as *mut uint8;
+    return (((&mut storage[0]) as intptr) + self.start + offset) as *mut uint8;
   }
 }
 
@@ -56,14 +56,14 @@ pub func NetBufferPointer(buffer: ref NetBuffer, offset: intptr) -> *mut uint8 {
  * @returns Ok with NetBuffer on success; Err with NetError on the failure paths described above.
  */
 pub static method(NetBuffer) CopyFrom(bytes: ref NetBytes) -> Result<NetBuffer, NetError> {
-  if bytes.Len() >(2147483647 as intptr) {
+  if bytes.Len() >(2147483647ip) {
     return NetError{kind: NetErrorKind.MessageTooLarge};
   }
 
-  let buffer: NetBuffer = NetBufferAllocate(bytes.Len() as int32);
-  if bytes.Len() >(0 as intptr) {
+  let buffer: NetBuffer = NetBuffer.Allocate(bytes.Len() as int32);
+  if bytes.Len() >(0ip) {
     unsafe {
-      memcpy(NetBufferPointer(buffer, 0 as intptr), bytes.Data(), bytes.Len() as uintptr);
+      memcpy((buffer).MutablePointer(0ip), bytes.Data(), bytes.Len() as uintptr);
     }
   }
 
@@ -93,7 +93,7 @@ pub method(NetBuffer) RetainedBytes() -> intptr {
  */
 pub method(NetBuffer) Bytes() -> NetBytes {
   let view: Result<NetBytes, NetError> = NetBytes.FromRaw(
-    NetBufferPointer(self, 0 as intptr) as *const uint8,
+    self.MutablePointer(0ip) as *const uint8,
     self.count
   );
 
@@ -105,11 +105,11 @@ pub method(NetBuffer) Bytes() -> NetBytes {
  * @returns Ok with NetBuffer on success; Err with NetError on the failure paths described above.
  */
 pub method(NetBuffer) Slice(start: intptr, length: intptr) -> Result<NetBuffer, NetError> {
-  if start <(0 as intptr) || length <(0 as intptr) || start > self.count || length > self.count - start {
+  if start <(0ip) || length <(0ip) || start > self.count || length > self.count - start {
     return NetError{kind: NetErrorKind.InvalidArgument};
   }
 
-  if length == (0 as intptr) {
+  if length == (0ip) {
     return NetBuffer{};
   }
 

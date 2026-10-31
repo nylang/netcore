@@ -7,3 +7,4 @@ __pycache__/
 *.o
 *.a
 .DS_Store
+.nyra/

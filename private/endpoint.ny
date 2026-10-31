@@ -78,7 +78,7 @@ pub static method(NetEndpoint) Parse(text: ref string) -> Result<NetEndpoint, Ne
     return NetError{kind: NetErrorKind.InvalidAddress};
   }
 
-  let port: NetNumber = net_parse_decimal(text, port_start, text.length, 65535 as uint32, false);
+  let port: NetNumber = NetNumber.Parse(text, port_start, text.length, 65535u32, false);
   if !port.valid {
     return NetError{kind: NetErrorKind.InvalidPort};
   }
@@ -121,18 +121,18 @@ pub method(NetEndpoint) ToString() -> string {
     return "";
   }
 
-  var out: FastString = FastString.NewWithCapacity(72);
+  var out: NetAddressWriter = NetAddressWriter{buffer: FastString.NewWithCapacity(72)};
   if self.ip.Family() == IpFamily.V6 {
-    out.PushByte(91 as uint8);
+    out.buffer.PushByte(91u8);
   }
 
-  net_append_address(&mut out, self.ip);
+  out.Render(self.ip);
   if self.ip.Family() == IpFamily.V6 {
-    out.PushByte(93 as uint8);
+    out.buffer.PushByte(93u8);
   }
 
-  out.PushByte(58 as uint8);
-  net_append_decimal(&mut out, self.port_number as uint32);
+  out.buffer.PushByte(58u8);
+  out.AppendDecimal(self.port_number as uint32);
 
-  return out.ToString();
+  return out.buffer.ToString();
 }

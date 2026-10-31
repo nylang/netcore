@@ -12,7 +12,7 @@ struct NetSocketState {
 
 method(NetSocketState) Take() -> NetSocketState {
   let out: NetSocketState = NetSocketState{handle: self.handle, live: self.live};
-  self.handle = 0 as intptr;
+  self.handle = 0ip;
   self.live = false;
 
   return out;
@@ -25,10 +25,10 @@ method(NetSocketState) Close() -> Result<Unit, NetError> {
 
   let handle: intptr = self.handle;
   self.live = false;
-  self.handle = 0 as intptr;
+  self.handle = 0ip;
   var error: NetNativeError = NetNativeError{};
   if net_core_os_close(handle, &mut error) != 0 {
-    return NetMapNativeError(error);
+    return (error).AsProduct();
   }
 
   return UnitValue();
@@ -40,37 +40,41 @@ method(NetSocketState) Close() -> Result<Unit, NetError> {
  */
 
 // Retain the same cancellation token and absolute deadline across wakeups; readiness alone is not completion.
-func net_wait_socket(
-  handle: intptr,
-  writable: bool,
-  options: ref NetOperationOptions
-) -> Result<Unit, NetError> {
+// A synchronous readiness lease borrows its descriptor and retains cancellation
+// controls through every wakeup. The socket owner remains responsible for Close.
+struct NetSocketWait {
+  handle: intptr;
+  writable: bool;
+  options: NetOperationOptions;
+}
+
+method(NetSocketWait) Run() -> Result<Unit, NetError> {
   while true {
-    let now: uint64 = NetClock.NowNanoseconds();
-    let checked: Result<Unit, NetError> = options.Check(now);
+    let now: uint64 = Instant.Now().ToDurationSinceEpochish().ToNanoseconds();
+    let checked: Result<Unit, NetError> = self.options.Check(now);
     let failure: NetError? = checked.get_if<NetError>();
     if failure != nil {
       return failure as NetError;
     }
 
-    var timeout: int32 = options.deadline.PollMilliseconds(now);
+    var timeout: int32 = self.options.deadline.PollMilliseconds(now);
     // Flag-only tokens retain cooperative polling; OS-backed tokens use only the deadline budget.
-    if options.cancellation.CanBeCancelled()
-      && !options.cancellation.CanWakeWaiters()
+    if self.options.cancellation.CanBeCancelled()
+      && !self.options.cancellation.CanWakeWaiters()
       && (timeout<0 || timeout>50) {
       timeout = 50;
     }
 
     var flag: int32 = 0;
-    if writable {
+    if self.writable {
       flag = 1;
     }
 
     var error: NetNativeError = NetNativeError{};
-    let wake_handle: intptr = NetCancellationWakeHandle(options.cancellation);
-    let result: int32 = net_core_os_wait_wake(handle, flag, timeout, wake_handle, &mut error);
+    let wake_handle: intptr = (self.options.cancellation).WakeHandle();
+    let result: int32 = net_core_os_wait_wake(self.handle, flag, timeout, wake_handle, &mut error);
     // Recheck both controls even if readiness and cancellation arrive together.
-    let active: Result<Unit, NetError> = NetCheckOperation(options);
+    let active: Result<Unit, NetError> = (self.options).CheckNow();
     let active_error: NetError? = active.get_if<NetError>();
     if active_error != nil {
       return active_error as NetError;
@@ -81,15 +85,15 @@ func net_wait_socket(
     }
 
     if result != 15 {
-      return NetMapNativeError(error);
+      return (error).AsProduct();
     }
   }
 
   return NetError{kind: NetErrorKind.System};
 }
 
-func net_socket_endpoint(owner: ref NetSocketState, peer: bool) -> Result<NetEndpoint, NetError> {
-  if !owner.live {
+method(NetSocketState) Endpoint(peer: bool) -> Result<NetEndpoint, NetError> {
+  if !self.live {
     return NetError{kind: NetErrorKind.Closed};
   }
 
@@ -100,9 +104,9 @@ func net_socket_endpoint(owner: ref NetSocketState, peer: bool) -> Result<NetEnd
     flag = 1;
   }
 
-  if net_core_os_endpoint(owner.handle, flag, &mut address, &mut error) != 0 {
-    return NetMapNativeError(error);
+  if net_core_os_endpoint(self.handle, flag, &mut address, &mut error) != 0 {
+    return (error).AsProduct();
   }
 
-  return NetProductEndpoint(address);
+  return (address).AsProduct();
 }

@@ -116,16 +116,16 @@ pub method(TcpConnectionTask) TakeConnection() -> Result<TcpConnection, NetError
   return TcpConnection{socket_value: cell.socket_value.Take()};
 }
 
-func net_register_connection(
-  driver: ref mut NetEventLoop, owner: ref NetSocketState,
+method(NetEventLoop) RegisterConnection(
+  owner: ref NetSocketState,
   endpoint: ref NetEndpoint, options: ref NetOperationOptions, dial: bool
 ) -> Result<TcpConnectionTask, NetError> {
   // Dial creates its own descriptor, so only the driver state/capacity is checked here.
-  if !driver.live {
+  if !self.live {
     return NetError{kind: NetErrorKind.Closed};
   }
 
-  if driver.pending.Len() >= driver.limit {
+  if self.pending.Len() >= self.limit {
     return NetError{kind: NetErrorKind.WouldBlock};
   }
 
@@ -133,17 +133,17 @@ func net_register_connection(
     return NetError{kind: NetErrorKind.Closed};
   }
 
-  if !dial && net_queue_direction_busy(driver, owner.handle, false) {
+  if !dial && self.DirectionBusy(owner.handle, false) {
     return NetError{kind: NetErrorKind.WouldBlock};
   }
 
-  let checked: Result<Unit, NetError> = NetCheckOperation(options);
+  let checked: Result<Unit, NetError> = (options).CheckNow();
   let failure: NetError? = checked.get_if<NetError>();
   if failure != nil {
     return move(failure as NetError);
   }
 
-  var handle: intptr = 0 as intptr;
+  var handle: intptr = 0;
   var error: NetNativeError = NetNativeError{};
   var kind: NetOperationKind = NetOperationKind.TcpAccept;
   if dial {
@@ -152,14 +152,14 @@ func net_register_connection(
       return NetError{kind: NetErrorKind.InvalidAddress};
     }
 
-    if net_core_os_open(NetNativeFamily(ip.Family()), 0, &mut handle, &mut error) != 0 {
-      return NetMapNativeError(error);
+    if net_core_os_open((ip.Family()).NativeDiscriminator(), 0, &mut handle, &mut error) != 0 {
+      return (error).AsProduct();
     }
 
     kind = NetOperationKind.TcpDial;
   } else {
     if net_core_os_duplicate(owner.handle, &mut handle, &mut error) != 0 {
-      return NetMapNativeError(error);
+      return (error).AsProduct();
     }
   }
 
@@ -170,29 +170,29 @@ func net_register_connection(
     socket_key = handle;
   }
 
-  driver.pending.Push(NetPendingOperation{
+  self.pending.Push(NetPendingOperation{
     handle: handle, socket_key: socket_key, writable: dial, kind: kind,
     options: options, endpoint: endpoint, promise: promise, connection: cell
     });
   return TcpConnectionTask{cell: cell};
 }
 
-func net_step_connection(entry: ref mut NetPendingOperation) -> NetOperationStep {
-  let optional: arc<NetConnectionCell>? = entry.connection;
+method(NetPendingOperation) StepConnection() -> NetOperationStep {
+  let optional: arc<NetConnectionCell>? = self.connection;
   if optional == nil {
     return NetOperationStep{complete: true, error: NetError{kind: NetErrorKind.System}};
   }
 
   var cell: arc<NetConnectionCell> = optional as arc<NetConnectionCell>;
   var error: NetNativeError = NetNativeError{};
-  if entry.kind == NetOperationKind.TcpDial {
+  if self.kind == NetOperationKind.TcpDial {
     var result: int32 = 0;
-    if !entry.attempted {
-      let address: NetNativeAddress = NetEncodeNativeAddress(entry.endpoint);
-      result = net_core_os_connect(entry.handle, &address, &mut error);
-      entry.attempted = true;
+    if !self.attempted {
+      let address: NetNativeAddress = (self.endpoint).AsNative();
+      result = net_core_os_connect(self.handle, &address, &mut error);
+      self.attempted = true;
     } else {
-      result = net_core_os_connect_result(entry.handle, &mut error);
+      result = net_core_os_connect_result(self.handle, &mut error);
     }
 
     if result == 15 {
@@ -200,23 +200,23 @@ func net_step_connection(entry: ref mut NetPendingOperation) -> NetOperationStep
     }
 
     if result != 0 {
-      return NetOperationStep{complete: true, error: NetMapNativeError(error)};
+      return NetOperationStep{complete: true, error: (error).AsProduct()};
     }
 
-    cell.socket_value = NetSocketState{handle: entry.handle, live: true};
+    cell.socket_value = NetSocketState{handle: self.handle, live: true};
 
     return NetOperationStep{complete: true, keep_handle: true};
   }
 
-  entry.attempted = true;
-  var accepted: intptr = 0 as intptr;
-  let result: int32 = net_core_os_accept(entry.handle, &mut accepted, &mut error);
+  self.attempted = true;
+  var accepted: intptr = 0;
+  let result: int32 = net_core_os_accept(self.handle, &mut accepted, &mut error);
   if result == 15 {
     return NetOperationStep{};
   }
 
   if result != 0 {
-    return NetOperationStep{complete: true, error: NetMapNativeError(error)};
+    return NetOperationStep{complete: true, error: (error).AsProduct()};
   }
 
   cell.socket_value = NetSocketState{handle: accepted, live: true};
@@ -234,7 +234,7 @@ pub static method(TcpConnection) DialAsync(
   endpoint: ref NetEndpoint,
   options: ref NetOperationOptions
 ) -> Result<TcpConnectionTask, NetError> {
-  return net_register_connection(driver, NetSocketState{}, endpoint, options, true);
+  return (driver).RegisterConnection(NetSocketState{}, endpoint, options, true);
 }
 
 /**
@@ -246,5 +246,5 @@ pub method(TcpListener) AcceptAsync(
   driver: ref mut NetEventLoop,
   options: ref NetOperationOptions
 ) -> Result<TcpConnectionTask, NetError> {
-  return net_register_connection(driver, self.socket_value, NetEndpoint{}, options, false);
+  return (driver).RegisterConnection(self.socket_value, NetEndpoint{}, options, false);
 }

@@ -23,7 +23,7 @@ struct NetNumber {
   value: uint32;
 }
 
-func net_parse_decimal(text: ref string, start: int32, end: int32, limit: uint32, strict: bool) -> NetNumber {
+static method(NetNumber) Parse(text: ref string, start: int32, end: int32, limit: uint32, strict: bool) -> NetNumber {
   if start < 0 || start >= end || end > text.length {
     return NetNumber{};
   }
@@ -41,18 +41,18 @@ func net_parse_decimal(text: ref string, start: int32, end: int32, limit: uint32
     }
 
     let digit: uint32 = (ch - 48) as uint32;
-    if value > limit / (10 as uint32) || (value == limit / (10 as uint32) && digit > limit % (10 as uint32)) {
+    if value > limit / (10u32) || (value == limit / (10u32) && digit > limit % (10u32)) {
       return NetNumber{};
     }
 
-    value = value * (10 as uint32) + digit;
+    value = value * (10u32) + digit;
     i = i + 1;
   }
 
   return NetNumber{valid: true, value: value};
 }
 
-func net_parse_v4(text: ref string, start: int32, end: int32, out: *mut IpAddress) -> bool {
+method(IpAddress) ReadV4Part(text: ref string, start: int32, end: int32) -> bool {
   var position: int32 = start;
   var octet: int32 = 0;
   while octet < 4 {
@@ -61,13 +61,13 @@ func net_parse_v4(text: ref string, start: int32, end: int32, out: *mut IpAddres
       position = position + 1;
     }
 
-    let number: NetNumber = net_parse_decimal(text, begin, position, 255 as uint32, true);
+    let number: NetNumber = NetNumber.Parse(text, begin, position, 255u32, true);
     if !number.valid {
       return false;
     }
 
     unsafe {
-      (*out).bytes[octet] = number.value as uint8;
+      self.bytes[octet] = number.value as uint8;
     }
 
     octet = octet + 1;
@@ -83,12 +83,13 @@ func net_parse_v4(text: ref string, start: int32, end: int32, out: *mut IpAddres
   }
 
   unsafe {
-    (*out).family_id = IpFamily.V4;
+    self.family_id = IpFamily.V4;
   }
 
   return true;
 }
 
+// nyra-lint-allow: prefer-type-owned-functions -- Small pure byte classification; no address or parser state.
 func net_hex_digit(ch: int32) -> int32 {
   if ch >= 48 && ch <= 57 {
     return ch - 48;
@@ -151,7 +152,7 @@ pub static method(IpAddress) Parse(text: ref string) -> Result<IpAddress, NetErr
     }
 
     if text[i] == '%' {
-      let parsed: NetNumber = net_parse_decimal(text, i + 1, end, 4294967295 as uint32, false);
+      let parsed: NetNumber = NetNumber.Parse(text, i + 1, end, kUint32Max, false);
       if !parsed.valid || !has_colon {
         return failure;
       }
@@ -166,7 +167,7 @@ pub static method(IpAddress) Parse(text: ref string) -> Result<IpAddress, NetErr
 
   var out: IpAddress = IpAddress{};
   if !has_colon {
-    if !net_parse_v4(text, 0, end, &mut out) {
+    if !(out).ReadV4Part(text, 0, end) {
       return failure;
     }
 
@@ -204,7 +205,7 @@ pub static method(IpAddress) Parse(text: ref string) -> Result<IpAddress, NetErr
       }
 
       var tail: IpAddress = IpAddress{};
-      if !net_parse_v4(text, begin, end, &mut tail) {
+      if !(tail).ReadV4Part(text, begin, end) {
         return failure;
       }
 
@@ -261,7 +262,7 @@ pub static method(IpAddress) Parse(text: ref string) -> Result<IpAddress, NetErr
   let zeros: int32 = 8 - count;
   i = 0;
   while i < 8 {
-    var word: uint16 = 0 as uint16;
+    var word: uint16 = 0;
     if gap < 0 || i < gap {
       word = words[i];
     } else if i >= gap + zeros {
@@ -408,38 +409,21 @@ pub method(IpAddress) Equals(other: ref IpAddress) -> bool {
   return true;
 }
 
-func net_append_decimal(out: *mut FastString, value: uint32) -> void {
-  var digits: <uint8>[10] = <uint8>[10] {
-  };
-  var count: int32 = 0;
-  var rest: uint32 = value;
-  if rest == 0 {
-    unsafe {
-      (*out).PushByte(48 as uint8);
-    }
-
-    return;
-  }
-
-  while rest > 0 {
-    digits[count] = ((48 as uint32) + rest % (10 as uint32)) as uint8;
-    rest = rest / (10 as uint32);
-    count = count + 1;
-  }
-
-  while count > 0 {
-    count = count - 1;
-    unsafe {
-      (*out).PushByte(digits[count]);
-    }
-  }
+// Canonical numeric address output is locale independent.
+struct NetAddressWriter {
+  buffer: FastString;
 }
 
-func net_address_word(address: ref IpAddress, index: int32) -> int32 {
-  return (address.bytes[index * 2] as int32) * 256 + (address.bytes[index * 2 + 1] as int32);
+method(NetAddressWriter) AppendDecimal(value: uint32) -> void {
+  self.buffer.Append(value.ToString());
 }
 
-func net_append_hex(out: *mut FastString, value: int32) -> void {
+
+method(IpAddress) Word(index: int32) -> int32 {
+  return (self.bytes[index * 2] as int32) * 256 + (self.bytes[index * 2 + 1] as int32);
+}
+
+method(NetAddressWriter) AppendHex(value: int32) -> void {
   let alphabet: string = "0123456789abcdef";
   var divisor: int32 = 4096;
   while divisor > 1 && value / divisor == 0 {
@@ -448,52 +432,52 @@ func net_append_hex(out: *mut FastString, value: int32) -> void {
 
   while divisor > 0 {
     unsafe {
-      (*out).PushByte(alphabet[(value / divisor) % 16] as uint8);
+      self.buffer.PushByte(alphabet[(value / divisor) % 16] as uint8);
     }
 
     divisor = divisor / 16;
   }
 }
 
-func net_append_v4(out: *mut FastString, address: ref IpAddress, start: int32) -> void {
+method(NetAddressWriter) AppendV4(address: ref IpAddress, start: int32) -> void {
   var i: int32 = 0;
   while i < 4 {
     if i > 0 {
       unsafe {
-        (*out).PushByte(46 as uint8);
+        self.buffer.PushByte(46u8);
       }
     }
 
-    net_append_decimal(out, address.bytes[start + i] as uint32);
+    self.AppendDecimal(address.bytes[start + i] as uint32);
     i = i + 1;
   }
 }
 
 // Render address bytes directly so canonical numeric output does not depend on a resolver or locale.
-func net_append_address(out: *mut FastString, address: ref IpAddress) -> void {
+method(NetAddressWriter) Render(address: ref IpAddress) -> void {
   if address.family_id == IpFamily.V4 {
-    net_append_v4(out, address, 0);
+    self.AppendV4(address, 0);
     return;
   }
 
   if address.IsV4Mapped() {
     unsafe {
-      (*out).Append("::ffff:");
+      self.buffer.Append("::ffff:");
     }
 
-    net_append_v4(out, address, 12);
+    self.AppendV4(address, 12);
   } else {
     var best_start: int32 = -1;
     var best_length: int32 = 0;
     var i: int32 = 0;
     while i < 8 {
-      if net_address_word(address, i) != 0 {
+      if (address).Word(i) != 0 {
         i = i + 1;
         continue;
       }
 
       let start: int32 = i;
-      while i < 8 && net_address_word(address, i) == 0 {
+      while i < 8 && (address).Word(i) == 0 {
         i = i + 1;
       }
 
@@ -507,7 +491,7 @@ func net_append_address(out: *mut FastString, address: ref IpAddress) -> void {
     while i < 8 {
       if i == best_start {
         unsafe {
-          (*out).Append("::");
+          self.buffer.Append("::");
         }
 
         i = i + best_length;
@@ -516,21 +500,21 @@ func net_append_address(out: *mut FastString, address: ref IpAddress) -> void {
 
       if i > 0 && i != best_start + best_length {
         unsafe {
-          (*out).PushByte(58 as uint8);
+          self.buffer.PushByte(58u8);
         }
       }
 
-      net_append_hex(out, net_address_word(address, i));
+      self.AppendHex((address).Word(i));
       i = i + 1;
     }
   }
 
   if address.numeric_scope != 0 {
     unsafe {
-      (*out).PushByte(37 as uint8);
+      self.buffer.PushByte(37u8);
     }
 
-    net_append_decimal(out, address.numeric_scope);
+    self.AppendDecimal(address.numeric_scope);
   }
 }
 
@@ -543,8 +527,8 @@ pub method(IpAddress) ToString() -> string {
     return "";
   }
 
-  var out: FastString = FastString.NewWithCapacity(64);
-  net_append_address(&mut out, self);
+  var out: NetAddressWriter = NetAddressWriter{buffer: FastString.NewWithCapacity(64)};
+  (out).Render(self);
 
-  return out.ToString();
+  return out.buffer.ToString();
 }

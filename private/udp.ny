@@ -34,16 +34,16 @@ pub static method(UdpSocket) Bind(endpoint: ref NetEndpoint) -> Result<UdpSocket
     return NetError{kind: NetErrorKind.InvalidAddress};
   }
 
-  var handle: intptr = 0 as intptr;
+  var handle: intptr = 0;
   var error: NetNativeError = NetNativeError{};
-  if net_core_os_open(NetNativeFamily(ip.Family()), 1, &mut handle, &mut error) != 0 {
-    return NetMapNativeError(error);
+  if net_core_os_open((ip.Family()).NativeDiscriminator(), 1, &mut handle, &mut error) != 0 {
+    return (error).AsProduct();
   }
 
   var socket: UdpSocket = UdpSocket{socket_value: NetSocketState{handle: handle, live: true}};
-  let address: NetNativeAddress = NetEncodeNativeAddress(endpoint);
+  let address: NetNativeAddress = (endpoint).AsNative();
   if net_core_os_bind(handle, &address, 0, &mut error) != 0 {
-    return NetMapNativeError(error);
+    return (error).AsProduct();
   }
 
   return move(socket);
@@ -67,15 +67,15 @@ pub method(UdpSocket) SendTo(
     return NetError{kind: NetErrorKind.InvalidAddress};
   }
 
-  let address: NetNativeAddress = NetEncodeNativeAddress(endpoint);
+  let address: NetNativeAddress = (endpoint).AsNative();
   while true {
-    let checked: Result<Unit, NetError> = NetCheckOperation(options);
+    let checked: Result<Unit, NetError> = (options).CheckNow();
     let failure: NetError? = checked.get_if<NetError>();
     if failure != nil {
       return failure as NetError;
     }
 
-    var count: intptr = 0 as intptr;
+    var count: intptr = 0;
     var error: NetNativeError = NetNativeError{};
     let result: int32 = net_core_os_send_to(
       self.socket_value.handle,
@@ -90,10 +90,11 @@ pub method(UdpSocket) SendTo(
     }
 
     if result != 15 {
-      return NetMapNativeError(error);
+      return (error).AsProduct();
     }
 
-    let waited: Result<Unit, NetError> = net_wait_socket(self.socket_value.handle, true, options);
+    let waited: Result<Unit, NetError> = NetSocketWait{handle: self.socket_value.handle, writable: true,
+      options: options}.Run();
     let wait_error: NetError? = waited.get_if<NetError>();
     if wait_error != nil {
       return wait_error as NetError;
@@ -117,13 +118,13 @@ pub method(UdpSocket) ReceiveFrom(
   }
 
   while true {
-    let checked: Result<Unit, NetError> = NetCheckOperation(options);
+    let checked: Result<Unit, NetError> = (options).CheckNow();
     let failure: NetError? = checked.get_if<NetError>();
     if failure != nil {
       return failure as NetError;
     }
 
-    var count: intptr = 0 as intptr;
+    var count: intptr = 0;
     var sender: NetNativeAddress = NetNativeAddress{};
     var error: NetNativeError = NetNativeError{};
     let result: int32 = net_core_os_receive_from(
@@ -135,14 +136,15 @@ pub method(UdpSocket) ReceiveFrom(
       &mut error
     );
     if result == 0 {
-      return NetDatagram{bytes_read: count, sender: NetProductEndpoint(sender)};
+      return NetDatagram{bytes_read: count, sender: (sender).AsProduct()};
     }
 
     if result != 15 {
-      return NetMapNativeError(error);
+      return (error).AsProduct();
     }
 
-    let waited: Result<Unit, NetError> = net_wait_socket(self.socket_value.handle, false, options);
+    let waited: Result<Unit, NetError> = NetSocketWait{handle: self.socket_value.handle, writable: false,
+      options: options}.Run();
     let wait_error: NetError? = waited.get_if<NetError>();
     if wait_error != nil {
       return wait_error as NetError;
@@ -158,7 +160,7 @@ pub method(UdpSocket) ReceiveFrom(
  *   above.
  */
 pub method(UdpSocket) LocalEndpoint() -> Result<NetEndpoint, NetError> {
-  return net_socket_endpoint(self.socket_value, false);
+  return (self.socket_value).Endpoint(false);
 }
 
 /**
@@ -191,8 +193,8 @@ pub method(UdpSocket) TrySendTo(endpoint: ref NetEndpoint, buffer: ref NetBytes)
     return NetError{kind: NetErrorKind.InvalidAddress};
   }
 
-  let address: NetNativeAddress = NetEncodeNativeAddress(endpoint);
-  var count: intptr = 0 as intptr;
+  let address: NetNativeAddress = (endpoint).AsNative();
+  var count: intptr = 0;
   var error: NetNativeError = NetNativeError{};
   if net_core_os_send_to(
     self.socket_value.handle,
@@ -202,7 +204,7 @@ pub method(UdpSocket) TrySendTo(endpoint: ref NetEndpoint, buffer: ref NetBytes)
     &mut count,
     &mut error
   ) != 0 {
-    return NetMapNativeError(error);
+    return (error).AsProduct();
   }
 
   return count;
@@ -219,7 +221,7 @@ pub method(UdpSocket) TryReceiveFrom(buffer: ref NetMutableBytes) -> Result<NetD
     return NetError{kind: NetErrorKind.Closed};
   }
 
-  var count: intptr = 0 as intptr;
+  var count: intptr = 0;
   var sender: NetNativeAddress = NetNativeAddress{};
   var error: NetNativeError = NetNativeError{};
   if net_core_os_receive_from(
@@ -230,8 +232,8 @@ pub method(UdpSocket) TryReceiveFrom(buffer: ref NetMutableBytes) -> Result<NetD
     &mut sender,
     &mut error
   ) != 0 {
-    return NetMapNativeError(error);
+    return (error).AsProduct();
   }
 
-  return NetDatagram{bytes_read: count, sender: NetProductEndpoint(sender)};
+  return NetDatagram{bytes_read: count, sender: (sender).AsProduct()};
 }

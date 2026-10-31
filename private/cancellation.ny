@@ -52,11 +52,11 @@ pub static method(NetCancellation) New() -> NetCancellation {
  * @note Cancel wakes all current/future readiness waits without periodic polling.
  */
 pub static method(NetCancellation) NewWakeable() -> Result<NetCancellation, NetError> {
-  var read_handle: intptr = 0 as intptr;
-  var write_handle: intptr = 0 as intptr;
+  var read_handle: intptr = 0;
+  var write_handle: intptr = 0;
   var error: NetNativeError = NetNativeError{};
   if net_core_os_wake_open(&mut read_handle, &mut write_handle, &mut error) != 0 {
-    return NetMapNativeError(error);
+    return (error).AsProduct();
   }
 
   let cell: arc<NetCancelCell> = new arc<NetCancelCell>{
@@ -89,15 +89,15 @@ pub method(NetCancellation) CanWakeWaiters() -> bool {
  * @returns The read handle for a live wakeable token, or the existing absent-handle sentinel.
  *   Retain the token throughout the wait.
  */
-pub func NetCancellationWakeHandle(token: ref NetCancellation) -> intptr {
-  let optional: arc<NetCancelCell>? = token.cell;
+pub method(NetCancellation) WakeHandle() -> intptr {
+  let optional: arc<NetCancelCell>? = self.cell;
   if optional == nil {
-    return -1 as intptr;
+    return -1ip;
   }
 
   let cell: arc<NetCancelCell> = optional as arc<NetCancelCell>;
   if !cell.wake_live {
-    return -1 as intptr;
+    return -1ip;
   }
 
   return cell.wake_read;
@@ -165,24 +165,13 @@ pub method(NetOperationOptions) Check(now_ns: uint64) -> Result<Unit, NetError> 
   return UnitValue();
 }
 
-/** @brief Monotonic operation admission and shared cancellation wake access. */
-
-/** @brief Hosted monotonic clock matching the transport deadline origin. */
-pub struct NetClock {
-  pad: uint8;
-}
-
 /**
  * @brief Check the original cancellation token and absolute deadline against the monotonic clock.
  * @returns Unit on admission, otherwise the original cancellation or timeout error.
  */
-pub func NetCheckOperation(options: ref NetOperationOptions) -> Result<Unit, NetError> {
-  return options.Check(NetClock.NowNanoseconds());
-}
+pub method(NetOperationOptions) CheckNow() -> Result<Unit, NetError> {
+  let now: Instant = Instant.Now();
+  let elapsed: Duration = now.ToDurationSinceEpochish();
 
-pub static method(NetClock) NowNanoseconds() -> uint64 {
-  let instant: Instant = Instant.Now();
-  let elapsed: Duration = instant.ToDurationSinceEpochish();
-
-  return elapsed.ToNanoseconds();
+  return self.Check(elapsed.ToNanoseconds());
 }

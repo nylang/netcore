@@ -1,5 +1,5 @@
 name: net_core
-version: 0.1.0
+version: 0.2.0
 license: MIT
 directories:
   interface:
@@ -9,3 +9,4 @@ directories:
   private:
     - private
     - tests
+analysis-options: lint.yaml

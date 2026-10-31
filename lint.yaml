@@ -1,0 +1,14 @@
+# Nyra house rules for maintained compiler/tool source. Register rules before enabling them.
+import: default
+linter:
+  rules:
+    prefer-type-owned-functions:
+      severity: error
+    declaration-naming:
+      severity: error
+    public-api-documentation:
+      severity: error
+    review-empty-owners:
+      severity: info
+    immutable-constant-declarations:
+      severity: error

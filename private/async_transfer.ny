@@ -5,15 +5,15 @@ part of NetSocketDriver;
 
 /** @brief Owned asynchronous payloads with bounded memory and one syscall per Poll step. */
 
-func net_register_transfer(
-  driver: ref mut NetEventLoop, owner: ref NetSocketState, kind: NetOperationKind,
+method(NetEventLoop) RegisterTransfer(
+  owner: ref NetSocketState, kind: NetOperationKind,
   input: ref NetBuffer, size: int32, endpoint: ref NetEndpoint, options: ref NetOperationOptions
 ) -> Result<AsyncFuture<NetTransfer>, NetError> {
   if size < 0 {
     return NetError{kind: NetErrorKind.InvalidArgument};
   }
 
-  let available: Result<Unit, NetError> = net_queue_space(driver, owner);
+  let available: Result<Unit, NetError> = self.CheckQueueSpace(owner);
   let space_error: NetError? = available.get_if<NetError>();
   if space_error != nil {
     return space_error as NetError;
@@ -22,11 +22,11 @@ func net_register_transfer(
   let writable: bool = kind == NetOperationKind.TcpWrite
     || kind == NetOperationKind.TcpWriteAll
     || kind == NetOperationKind.UdpSend;
-  if net_queue_direction_busy(driver, owner.handle, writable) {
+  if self.DirectionBusy(owner.handle, writable) {
     return NetError{kind: NetErrorKind.WouldBlock};
   }
 
-  let checked: Result<Unit, NetError> = NetCheckOperation(options);
+  let checked: Result<Unit, NetError> = (options).CheckNow();
   let failure: NetError? = checked.get_if<NetError>();
   if failure != nil {
     return failure as NetError;
@@ -37,7 +37,7 @@ func net_register_transfer(
     cost = size as intptr;
   }
 
-  if cost > driver.max_retained_bytes - driver.retained_bytes {
+  if cost > self.max_retained_bytes - self.retained_bytes {
     return NetError{kind: NetErrorKind.WouldBlock};
   }
 
@@ -48,47 +48,47 @@ func net_register_transfer(
     }
   }
 
-  var handle: intptr = 0 as intptr;
+  var handle: intptr = 0;
   var error: NetNativeError = NetNativeError{};
   if net_core_os_duplicate(owner.handle, &mut handle, &mut error) != 0 {
-    return NetMapNativeError(error);
+    return (error).AsProduct();
   }
 
   var buffer: NetBuffer = input;
   if !writable {
-    buffer = NetBufferAllocate(size);
+    buffer = NetBuffer.Allocate(size);
   }
 
   let promise: AsyncPromise<NetTransfer> = AsyncPromise<NetTransfer>.New();
   let future: AsyncFuture<NetTransfer> = promise.FutureHandle();
-  driver.pending.Push(NetPendingOperation{
+  self.pending.Push(NetPendingOperation{
     handle: handle, socket_key: owner.handle, writable: writable, kind: kind, options: options,
     transfer_promise: promise, buffer: buffer, endpoint: endpoint, cost: cost
     });
-  driver.retained_bytes = driver.retained_bytes + cost;
+  self.retained_bytes = self.retained_bytes + cost;
 
   return future;
 }
 
-func net_step_transfer(entry: ref mut NetPendingOperation) -> NetOperationStep {
-  entry.attempted = true;
-  var count: intptr = 0 as intptr;
+method(NetPendingOperation) StepTransfer() -> NetOperationStep {
+  self.attempted = true;
+  var count: intptr = 0;
   var error: NetNativeError = NetNativeError{};
   var result: int32 = 0;
-  let remaining: intptr = entry.buffer.Len() - entry.progress;
-  if entry.kind == NetOperationKind.TcpRead || entry.kind == NetOperationKind.TcpReadExactly {
-    if remaining == (0 as intptr) {
+  let remaining: intptr = self.buffer.Len() - self.progress;
+  if self.kind == NetOperationKind.TcpRead || self.kind == NetOperationKind.TcpReadExactly {
+    if remaining == (0ip) {
       return NetOperationStep{complete: true};
     }
 
     var size: intptr = remaining;
-    if size >(65536 as intptr) {
-      size = 65536 as intptr;
+    if size >(65536ip) {
+      size = 65536ip;
     }
 
     result = net_core_os_read(
-      entry.handle,
-      NetBufferPointer(entry.buffer, entry.progress),
+      self.handle,
+      (self.buffer).MutablePointer(self.progress),
       size,
       &mut count,
       &mut error
@@ -98,36 +98,36 @@ func net_step_transfer(entry: ref mut NetPendingOperation) -> NetOperationStep {
     }
 
     if result != 0 {
-      return NetOperationStep{complete: true, error: NetMapNativeError(error)};
+      return NetOperationStep{complete: true, error: (error).AsProduct()};
     }
 
-    if count == (0 as intptr) {
-      if entry.kind == NetOperationKind.TcpReadExactly {
+    if count == (0ip) {
+      if self.kind == NetOperationKind.TcpReadExactly {
         return NetOperationStep{complete: true, eof: true, error: NetError{kind: NetErrorKind.UnexpectedEof}};
       }
 
       return NetOperationStep{complete: true, eof: true};
     }
 
-    entry.progress = entry.progress + count;
+    self.progress = self.progress + count;
 
-    return NetOperationStep{complete: entry.kind == NetOperationKind.TcpRead
-      || entry.progress == entry.buffer.Len()};
+    return NetOperationStep{complete: self.kind == NetOperationKind.TcpRead
+      || self.progress == self.buffer.Len()};
   }
 
-  if entry.kind == NetOperationKind.TcpWrite || entry.kind == NetOperationKind.TcpWriteAll {
-    if remaining == (0 as intptr) {
+  if self.kind == NetOperationKind.TcpWrite || self.kind == NetOperationKind.TcpWriteAll {
+    if remaining == (0ip) {
       return NetOperationStep{complete: true};
     }
 
     var size: intptr = remaining;
-    if size >(65536 as intptr) {
-      size = 65536 as intptr;
+    if size >(65536ip) {
+      size = 65536ip;
     }
 
     result = net_core_os_write(
-      entry.handle,
-      NetBufferPointer(entry.buffer, entry.progress) as *const uint8,
+      self.handle,
+      (self.buffer).MutablePointer(self.progress) as *const uint8,
       size,
       &mut count,
       &mut error
@@ -137,25 +137,25 @@ func net_step_transfer(entry: ref mut NetPendingOperation) -> NetOperationStep {
     }
 
     if result != 0 {
-      return NetOperationStep{complete: true, error: NetMapNativeError(error)};
+      return NetOperationStep{complete: true, error: (error).AsProduct()};
     }
 
-    if count == (0 as intptr) {
+    if count == (0ip) {
       return NetOperationStep{complete: true, error: NetError{kind: NetErrorKind.ConnectionAborted}};
     }
 
-    entry.progress = entry.progress + count;
+    self.progress = self.progress + count;
 
-    return NetOperationStep{complete: entry.kind == NetOperationKind.TcpWrite
-      || entry.progress == entry.buffer.Len()};
+    return NetOperationStep{complete: self.kind == NetOperationKind.TcpWrite
+      || self.progress == self.buffer.Len()};
   }
 
-  if entry.kind == NetOperationKind.UdpReceive {
+  if self.kind == NetOperationKind.UdpReceive {
     var sender: NetNativeAddress = NetNativeAddress{};
     result = net_core_os_receive_from(
-      entry.handle,
-      NetBufferPointer(entry.buffer, 0 as intptr),
-      entry.buffer.Len(),
+      self.handle,
+      (self.buffer).MutablePointer(0ip),
+      self.buffer.Len(),
       &mut count,
       &mut sender,
       &mut error
@@ -165,22 +165,22 @@ func net_step_transfer(entry: ref mut NetPendingOperation) -> NetOperationStep {
     }
 
     if result != 0 {
-      return NetOperationStep{complete: true, error: NetMapNativeError(error)};
+      return NetOperationStep{complete: true, error: (error).AsProduct()};
     }
 
-    entry.progress = count;
-    entry.endpoint = NetProductEndpoint(sender);
+    self.progress = count;
+    self.endpoint = (sender).AsProduct();
 
     return NetOperationStep{complete: true};
   }
 
-  if entry.kind == NetOperationKind.UdpSend {
-    let address: NetNativeAddress = NetEncodeNativeAddress(entry.endpoint);
+  if self.kind == NetOperationKind.UdpSend {
+    let address: NetNativeAddress = (self.endpoint).AsNative();
     result = net_core_os_send_to(
-      entry.handle,
+      self.handle,
       &address,
-      NetBufferPointer(entry.buffer, 0 as intptr) as *const uint8,
-      entry.buffer.Len(),
+      (self.buffer).MutablePointer(0ip) as *const uint8,
+      self.buffer.Len(),
       &mut count,
       &mut error
     );
@@ -189,10 +189,10 @@ func net_step_transfer(entry: ref mut NetPendingOperation) -> NetOperationStep {
     }
 
     if result != 0 {
-      return NetOperationStep{complete: true, error: NetMapNativeError(error)};
+      return NetOperationStep{complete: true, error: (error).AsProduct()};
     }
 
-    entry.progress = count;
+    self.progress = count;
 
     return NetOperationStep{complete: true};
   }
@@ -216,15 +216,12 @@ pub method(TcpConnection) ReadAsync(
   max_bytes: int32,
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<NetTransfer>, NetError> {
-  return net_register_transfer(
-    driver,
-    self.socket_value,
+  return (driver).RegisterTransfer(self.socket_value,
     NetOperationKind.TcpRead,
     NetBuffer{},
     max_bytes,
     NetEndpoint{},
-    options
-  );
+    options);
 }
 
 /**
@@ -237,15 +234,12 @@ pub method(TcpConnection) ReadExactlyAsync(
   size: int32,
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<NetTransfer>, NetError> {
-  return net_register_transfer(
-    driver,
-    self.socket_value,
+  return (driver).RegisterTransfer(self.socket_value,
     NetOperationKind.TcpReadExactly,
     NetBuffer{},
     size,
     NetEndpoint{},
-    options
-  );
+    options);
 }
 
 /**
@@ -261,15 +255,12 @@ pub method(TcpConnection) WriteAsync(
   buffer: ref NetBuffer,
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<NetTransfer>, NetError> {
-  return net_register_transfer(
-    driver,
-    self.socket_value,
+  return (driver).RegisterTransfer(self.socket_value,
     NetOperationKind.TcpWrite,
     buffer,
     0,
     NetEndpoint{},
-    options
-  );
+    options);
 }
 
 /**
@@ -283,15 +274,12 @@ pub method(TcpConnection) WriteAllAsync(
   buffer: ref NetBuffer,
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<NetTransfer>, NetError> {
-  return net_register_transfer(
-    driver,
-    self.socket_value,
+  return (driver).RegisterTransfer(self.socket_value,
     NetOperationKind.TcpWriteAll,
     buffer,
     0,
     NetEndpoint{},
-    options
-  );
+    options);
 }
 
 /**
@@ -305,15 +293,12 @@ pub method(UdpSocket) ReceiveFromAsync(
   max_bytes: int32,
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<NetTransfer>, NetError> {
-  return net_register_transfer(
-    driver,
-    self.socket_value,
+  return (driver).RegisterTransfer(self.socket_value,
     NetOperationKind.UdpReceive,
     NetBuffer{},
     max_bytes,
     NetEndpoint{},
-    options
-  );
+    options);
 }
 
 /**
@@ -327,13 +312,10 @@ pub method(UdpSocket) SendToAsync(
   buffer: ref NetBuffer,
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<NetTransfer>, NetError> {
-  return net_register_transfer(
-    driver,
-    self.socket_value,
+  return (driver).RegisterTransfer(self.socket_value,
     NetOperationKind.UdpSend,
     buffer,
     0,
     endpoint,
-    options
-  );
+    options);
 }

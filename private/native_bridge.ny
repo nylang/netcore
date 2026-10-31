@@ -16,63 +16,63 @@ import "private/native_abi.ni";
  * @brief Translate the fixed native error record into the product error taxonomy.
  * @returns The mapped kind with its original native code retained.
  */
-pub func NetMapNativeError(error: ref NetNativeError) -> NetError {
+pub method(NetNativeError) AsProduct() -> NetError {
   var kind: NetErrorKind = NetErrorKind.System;
-  if error.kind == 1 {
+  if self.kind == 1 {
     kind = NetErrorKind.InvalidArgument;
-  } else if error.kind == 2 {
+  } else if self.kind == 2 {
     kind = NetErrorKind.InvalidAddress;
-  } else if error.kind == 3 {
+  } else if self.kind == 3 {
     kind = NetErrorKind.InvalidPort;
-  } else if error.kind == 4 {
+  } else if self.kind == 4 {
     kind = NetErrorKind.UnsupportedFamily;
-  } else if error.kind == 5 {
+  } else if self.kind == 5 {
     kind = NetErrorKind.NameNotFound;
-  } else if error.kind == 6 {
+  } else if self.kind == 6 {
     kind = NetErrorKind.PermissionDenied;
-  } else if error.kind == 7 {
+  } else if self.kind == 7 {
     kind = NetErrorKind.AddressInUse;
-  } else if error.kind == 8 {
+  } else if self.kind == 8 {
     kind = NetErrorKind.AddressUnavailable;
-  } else if error.kind == 9 {
+  } else if self.kind == 9 {
     kind = NetErrorKind.ConnectionRefused;
-  } else if error.kind == 10 {
+  } else if self.kind == 10 {
     kind = NetErrorKind.ConnectionReset;
-  } else if error.kind == 11 {
+  } else if self.kind == 11 {
     kind = NetErrorKind.ConnectionAborted;
-  } else if error.kind == 12 {
+  } else if self.kind == 12 {
     kind = NetErrorKind.NotConnected;
-  } else if error.kind == 13 {
+  } else if self.kind == 13 {
     kind = NetErrorKind.NetworkUnreachable;
-  } else if error.kind == 14 {
+  } else if self.kind == 14 {
     kind = NetErrorKind.HostUnreachable;
-  } else if error.kind == 15 {
+  } else if self.kind == 15 {
     kind = NetErrorKind.WouldBlock;
-  } else if error.kind == 16 {
+  } else if self.kind == 16 {
     kind = NetErrorKind.TimedOut;
-  } else if error.kind == 17 {
+  } else if self.kind == 17 {
     kind = NetErrorKind.Cancelled;
-  } else if error.kind == 18 {
+  } else if self.kind == 18 {
     kind = NetErrorKind.Closed;
-  } else if error.kind == 19 {
+  } else if self.kind == 19 {
     kind = NetErrorKind.MessageTooLarge;
-  } else if error.kind == 20 {
+  } else if self.kind == 20 {
     kind = NetErrorKind.NotSupported;
   }
 
-  return NetError{kind: kind, native_code: error.native_code};
+  return NetError{kind: kind, native_code: self.native_code};
 }
 
 /**
  * @brief Translate a product IP family into the private native family discriminator.
  * @returns The native discriminator; zero denotes unspecified or unsupported.
  */
-pub func NetNativeFamily(family: IpFamily) -> int32 {
-  if family == IpFamily.V4 {
+pub method(IpFamily) NativeDiscriminator() -> int32 {
+  if self == IpFamily.V4 {
     return 4;
   }
 
-  if family == IpFamily.V6 {
+  if self == IpFamily.V6 {
     return 6;
   }
 
@@ -83,11 +83,11 @@ pub func NetNativeFamily(family: IpFamily) -> int32 {
  * @brief Convert an endpoint value to the pointer-only OS ABI representation.
  * @returns An inline native address record; no descriptor or source storage is owned.
  */
-pub func NetEncodeNativeAddress(endpoint: ref NetEndpoint) -> NetNativeAddress {
-  let address: IpAddress = endpoint.Address();
+pub method(NetEndpoint) AsNative() -> NetNativeAddress {
+  let address: IpAddress = self.Address();
   var out: NetNativeAddress = NetNativeAddress{
-    family: NetNativeFamily(address.Family()),
-    port: endpoint.Port() as int32,
+    family: (address.Family()).NativeDiscriminator(),
+    port: self.Port() as int32,
     scope_id: address.ScopeId()
   };
   var count: int32 = 0;
@@ -111,15 +111,15 @@ pub func NetEncodeNativeAddress(endpoint: ref NetEndpoint) -> NetNativeAddress {
  * @brief Convert a completed native address record into a product endpoint value.
  * @returns An inline endpoint preserving address bytes, port and scope.
  */
-pub func NetProductEndpoint(address: ref NetNativeAddress) -> NetEndpoint {
+pub method(NetNativeAddress) AsProduct() -> NetEndpoint {
   var ip: IpAddress = IpAddress{};
-  if address.family == 4 {
-    ip = IpAddress.V4(address.bytes[0], address.bytes[1], address.bytes[2], address.bytes[3]);
+  if self.family == 4 {
+    ip = IpAddress.V4(self.bytes[0], self.bytes[1], self.bytes[2], self.bytes[3]);
   } else {
-    ip = IpAddress.V6(address.bytes, address.scope_id);
+    ip = IpAddress.V6(self.bytes, self.scope_id);
   }
 
-  let parsed: Result<NetEndpoint, NetError> = NetEndpoint.New(ip, address.port);
+  let parsed: Result<NetEndpoint, NetError> = NetEndpoint.New(ip, self.port);
 
   return (parsed.get_if<NetEndpoint>()) as NetEndpoint;
 }

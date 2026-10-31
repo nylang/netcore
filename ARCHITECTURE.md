@@ -28,3 +28,32 @@ closure lifetime covers pending registration through retirement. Cancellation,
 deadline precedence, duplicate-handle ownership and result publication remain the
 existing contracts. Public contract tests are independent selftest TUs; only the
 bounded-write queue inspection remains a private owner-side unit test.
+
+
+## 1.0.5 type ownership
+
+The native bridge extends NetNativeError/NetNativeAddress with product conversion,
+and NetEndpoint/IpFamily with private ABI conversion. NetEventLoop owns queue
+admission, direction checks, registration and retirement. NetPendingOperation
+owns control precedence and step/completion values; NetOperationCompletion
+publishes only after queue detachment. NetResolverPool owns mutex-protected slot
+selection, readiness, worker execution and stop. Worker closures retain an ARC
+owner throughout each borrowed method call. No DNS layout enters the event loop.
+
+NetSocketWait retains immutable controls but borrows the descriptor for a bounded
+synchronous wait; it cannot close it. NetNumber owns bounded decimal admission,
+IpAddress owns partial IPv4 parsing/word projection, and NetAddressWriter owns
+canonical text output. Shared integer formatting supplies decimal text. Generic
+single-byte hex classification stays a small documented pure-function exception.
+
+Test-only constructors/polling extensions remain in the fixture TU, outside the
+product face. Immutable address/DNS/descriptor expectations own their checks.
+Assertions use the shared ntest protocol. Functions that intentionally exercise
+return-time resource/Future drop have specific local lint reasons; there is no
+package-wide suppression. The native C ABI declarations and adapter bodies are
+unchanged. Matching 1.0.5 source runtimes are required for integer formatting.
+
+Generic monotonic sampling uses stdlib Instant/Duration directly. NetClock and
+its dummy storage field are removed; NetOperationOptions.CheckNow owns transport
+admission policy over that existing clock capability. No replacement namespace
+or new provider clock is introduced.

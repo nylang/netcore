@@ -10,15 +10,6 @@
 import "stdlib:stdlib.ny";
 import "interface/foundation.ni";
 
-/** @brief Hosted monotonic clock matching the transport deadline origin. */
-pub struct NetClock;
-
-/**
- * @brief Nanoseconds since the hosted monotonic origin, not Unix time or raw clock ticks.
- * @returns Nanoseconds since the hosted monotonic origin, not Unix time or raw clock ticks.
- */
-pub static method(NetClock) NowNanoseconds() -> uint64;
-
 /** @brief OS resolver; synchronous lookup has no timeout/cancellation guarantee. */
 pub struct Resolver;
 

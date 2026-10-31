@@ -73,7 +73,7 @@ pub struct NetEventLoop {
  * @note Full queues fail with WouldBlock; no background threads or unbounded task growth.
  */
 pub static method(NetEventLoop) New(max_pending: int32) -> Result<NetEventLoop, NetError> {
-  return NetEventLoop.NewWithLimits(max_pending, 16777216 as intptr);
+  return NetEventLoop.NewWithLimits(max_pending, 16777216ip);
 }
 
 /**
@@ -89,7 +89,7 @@ pub static method(NetEventLoop) NewWithLimits(
   max_pending: int32,
   max_retained_bytes: intptr
 ) -> Result<NetEventLoop, NetError> {
-  if max_pending < 1 || max_pending > 256 || max_retained_bytes <(0 as intptr) {
+  if max_pending < 1 || max_pending > 256 || max_retained_bytes <(0ip) {
     return NetError{kind: NetErrorKind.InvalidArgument};
   }
 
@@ -120,8 +120,8 @@ pub method(NetEventLoop) operator move() -> NetEventLoop {
   let retained: intptr = self.retained_bytes;
   self.live = false;
   self.limit = 0;
-  self.max_retained_bytes = 0 as intptr;
-  self.retained_bytes = 0 as intptr;
+  self.max_retained_bytes = 0ip;
+  self.retained_bytes = 0ip;
 
   return NetEventLoop{
     pending: move(self.pending),
@@ -154,19 +154,19 @@ pub method(NetEventLoop) RetainedBytes() -> intptr {
   return self.retained_bytes;
 }
 
-func net_operation_is_transfer(kind: NetOperationKind) -> bool {
-  return kind != NetOperationKind.Readiness
-    && kind != NetOperationKind.TcpDial
-    && kind != NetOperationKind.TcpAccept
-    && kind != NetOperationKind.ResolverReady;
+method(NetOperationKind) IsTransfer() -> bool {
+  return self != NetOperationKind.Readiness
+    && self != NetOperationKind.TcpDial
+    && self != NetOperationKind.TcpAccept
+    && self != NetOperationKind.ResolverReady;
 }
 
-func net_operation_control_error(entry: ref NetPendingOperation, now: uint64) -> NetError? {
-  if entry.options.cancellation.IsCancelled() {
+method(NetPendingOperation) ControlError(now: uint64) -> NetError? {
+  if self.options.cancellation.IsCancelled() {
     return NetError{kind: NetErrorKind.Cancelled};
   }
 
-  let optional: arc<NetConnectionCell>? = entry.connection;
+  let optional: arc<NetConnectionCell>? = self.connection;
   var abandoned: bool = false;
   if optional != nil {
     let cell: arc<NetConnectionCell> = optional as arc<NetConnectionCell>;
@@ -177,7 +177,7 @@ func net_operation_control_error(entry: ref NetPendingOperation, now: uint64) ->
     abandoned = cell.abandoned;
   }
 
-  if entry.options.deadline.IsExpired(now) {
+  if self.options.deadline.IsExpired(now) {
     return NetError{kind: NetErrorKind.TimedOut};
   }
 
@@ -185,8 +185,8 @@ func net_operation_control_error(entry: ref NetPendingOperation, now: uint64) ->
     return NetError{kind: NetErrorKind.Closed};
   }
 
-  if entry.kind == NetOperationKind.ResolverReady {
-    if entry.resolver_probe(now).closed {
+  if self.kind == NetOperationKind.ResolverReady {
+    if self.resolver_probe(now).closed {
       return NetError{kind: NetErrorKind.Closed};
     }
   }
@@ -194,29 +194,28 @@ func net_operation_control_error(entry: ref NetPendingOperation, now: uint64) ->
   return nil;
 }
 
-func net_operation_completion(
-  entry: ref NetPendingOperation,
+method(NetPendingOperation) Completion(
   error: NetError?,
   eof: bool
 ) -> NetOperationCompletion {
-  if net_operation_is_transfer(entry.kind) {
+  if (self.kind).IsTransfer() {
     var received: NetBuffer = NetBuffer{};
     var sender: NetEndpoint? = nil;
-    if entry.kind == NetOperationKind.TcpRead
-      || entry.kind == NetOperationKind.TcpReadExactly
-      || entry.kind == NetOperationKind.UdpReceive {
-      let sliced: Result<NetBuffer, NetError> = entry.buffer.Slice(0 as intptr, entry.progress);
+    if self.kind == NetOperationKind.TcpRead
+      || self.kind == NetOperationKind.TcpReadExactly
+      || self.kind == NetOperationKind.UdpReceive {
+      let sliced: Result<NetBuffer, NetError> = self.buffer.Slice(0ip, self.progress);
       received = (sliced.get_if<NetBuffer>()) as NetBuffer;
-      if entry.kind == NetOperationKind.UdpReceive && error == nil {
-        sender = entry.endpoint;
+      if self.kind == NetOperationKind.UdpReceive && error == nil {
+        sender = self.endpoint;
       }
     }
 
     return NetOperationCompletion{
       transfer: true,
-      transfer_promise: entry.transfer_promise,
+      transfer_promise: self.transfer_promise,
       transfer_value: NetTransfer{
-        bytes_transferred: entry.progress,
+        bytes_transferred: self.progress,
         buffer: received,
         sender: sender,
         eof: eof,
@@ -225,7 +224,7 @@ func net_operation_completion(
     };
   }
 
-  let optional: arc<NetConnectionCell>? = entry.connection;
+  let optional: arc<NetConnectionCell>? = self.connection;
   if optional != nil {
     var cell: arc<NetConnectionCell> = optional as arc<NetConnectionCell>;
     cell.completed = true;
@@ -237,14 +236,14 @@ func net_operation_completion(
     value = error as NetError;
   }
 
-  return NetOperationCompletion{promise: entry.promise, value: value};
+  return NetOperationCompletion{promise: self.promise, value: value};
 }
 
-func net_publish_completion(completion: ref mut NetOperationCompletion) -> void {
-  if completion.transfer {
-    completion.transfer_promise.Complete(completion.transfer_value);
+method(NetOperationCompletion) Publish() -> void {
+  if self.transfer {
+    self.transfer_promise.Complete(self.transfer_value);
   } else {
-    completion.promise.Complete(completion.value);
+    self.promise.Complete(self.value);
   }
 }
 
@@ -255,7 +254,7 @@ pub method(NetEventLoop) Close() -> void {
   }
 
   self.live = false;
-  self.retained_bytes = 0 as intptr;
+  self.retained_bytes = 0ip;
   var detached: FastArray<NetPendingOperation> = move(self.pending);
   self.scratch.Reset();
   var i: int32 = 0;
@@ -270,7 +269,7 @@ pub method(NetEventLoop) Close() -> void {
   i = 0;
   while i < detached.Len() {
     let entry: NetPendingOperation = detached.Get(i);
-    completed.Push(net_operation_completion(entry, NetError{kind: NetErrorKind.Closed}, false));
+    completed.Push((entry).Completion(NetError{kind: NetErrorKind.Closed}, false));
     i = i + 1;
   }
 
@@ -278,27 +277,27 @@ pub method(NetEventLoop) Close() -> void {
   i = 0;
   while i < completed.Len() {
     var completion: NetOperationCompletion = completed.Get(i);
-    net_publish_completion(completion);
+    (completion).Publish();
     i = i + 1;
   }
 }
 
-func net_queue_space(driver: ref NetEventLoop, owner: ref NetSocketState) -> Result<Unit, NetError> {
-  if !driver.live || !owner.live {
+method(NetEventLoop) CheckQueueSpace(owner: ref NetSocketState) -> Result<Unit, NetError> {
+  if !self.live || !owner.live {
     return NetError{kind: NetErrorKind.Closed};
   }
 
-  if driver.pending.Len() >= driver.limit {
+  if self.pending.Len() >= self.limit {
     return NetError{kind: NetErrorKind.WouldBlock};
   }
 
   return UnitValue();
 }
 
-func net_queue_direction_busy(driver: ref NetEventLoop, socket_key: intptr, writable: bool) -> bool {
+method(NetEventLoop) DirectionBusy(socket_key: intptr, writable: bool) -> bool {
   var i: int32 = 0;
-  while i < driver.pending.Len() {
-    let entry: NetPendingOperation = driver.pending.Get(i);
+  while i < self.pending.Len() {
+    let entry: NetPendingOperation = self.pending.Get(i);
     if entry.kind != NetOperationKind.Readiness
       && entry.kind != NetOperationKind.ResolverReady
       && entry.socket_key == socket_key
@@ -312,11 +311,11 @@ func net_queue_direction_busy(driver: ref NetEventLoop, socket_key: intptr, writ
   return false;
 }
 
-func net_register_readiness(
-  driver: ref mut NetEventLoop, owner: ref NetSocketState,
+method(NetEventLoop) RegisterReadiness(
+  owner: ref NetSocketState,
   writable: bool, options: ref NetOperationOptions
 ) -> Result<AsyncFuture<Result<Unit, NetError>>, NetError> {
-  let available: Result<Unit, NetError> = net_queue_space(driver, owner);
+  let available: Result<Unit, NetError> = self.CheckQueueSpace(owner);
   let space_error: NetError? = available.get_if<NetError>();
   if space_error != nil {
     return space_error as NetError;
@@ -324,7 +323,7 @@ func net_register_readiness(
 
   var promise: AsyncPromise<Result<Unit, NetError>> = AsyncPromise<Result<Unit, NetError>>.New();
   let future: AsyncFuture<Result<Unit, NetError>> = promise.FutureHandle();
-  let checked: Result<Unit, NetError> = NetCheckOperation(options);
+  let checked: Result<Unit, NetError> = (options).CheckNow();
   let failure: NetError? = checked.get_if<NetError>();
   if failure != nil {
     promise.Complete(checked);
@@ -332,30 +331,30 @@ func net_register_readiness(
     return future;
   }
 
-  var handle: intptr = 0 as intptr;
+  var handle: intptr = 0;
   var error: NetNativeError = NetNativeError{};
   if net_core_os_duplicate(owner.handle, &mut handle, &mut error) != 0 {
-    return NetMapNativeError(error);
+    return (error).AsProduct();
   }
 
-  driver.pending.Push(NetPendingOperation{
+  self.pending.Push(NetPendingOperation{
     handle: handle, socket_key: owner.handle, writable: writable, options: options, promise: promise,
     kind: NetOperationKind.Readiness, attempted: true
     });
   return future;
 }
 
-func net_operation_remove(driver: ref mut NetEventLoop, index: int32, keep_handle: bool) -> void {
-  let entry: NetPendingOperation = driver.pending.Get(index);
+method(NetEventLoop) Retire(index: int32, keep_handle: bool) -> void {
+  let entry: NetPendingOperation = self.pending.Get(index);
   if !keep_handle {
     var ignored: NetNativeError = NetNativeError{};
     net_core_os_close(entry.handle, &mut ignored);
   }
 
-  driver.retained_bytes = driver.retained_bytes - entry.cost;
-  let last: NetPendingOperation = driver.pending.Pop();
-  if index < driver.pending.Len() {
-    driver.pending.Set(index, last);
+  self.retained_bytes = self.retained_bytes - entry.cost;
+  let last: NetPendingOperation = self.pending.Pop();
+  if index < self.pending.Len() {
+    self.pending.Set(index, last);
   }
 }
 
@@ -384,7 +383,7 @@ pub method(NetEventLoop) Poll(maximum_wait_ms: int32) -> Result<int32, NetError>
 
   self.scratch.Reset();
   var timeout: int32 = maximum_wait_ms;
-  let now: uint64 = NetClock.NowNanoseconds();
+  let now: uint64 = Instant.Now().ToDurationSinceEpochish().ToNanoseconds();
   var earliest: NetDeadline = NetDeadline.Never();
   var i: int32 = 0;
   while i < count {
@@ -396,10 +395,10 @@ pub method(NetEventLoop) Poll(maximum_wait_ms: int32) -> Result<int32, NetError>
 
     var row: NetNativeWait = NetNativeWait{
       handle: entry.handle,
-      wake_handle: NetCancellationWakeHandle(entry.options.cancellation),
+      wake_handle: (entry.options.cancellation).WakeHandle(),
       writable: flag
     };
-    let control_error: NetError? = net_operation_control_error(entry, now);
+    let control_error: NetError? = (entry).ControlError(now);
     if control_error != nil {
       row.ready = 1;
       timeout = 0;
@@ -449,7 +448,7 @@ pub method(NetEventLoop) Poll(maximum_wait_ms: int32) -> Result<int32, NetError>
   // Snapshot preparation consumes real time too. Convert the earliest absolute
   // deadline immediately before entering the native wait, rather than extending
   // it by the duration of queue traversal and retained-value copies.
-  let budget: int32 = earliest.PollMilliseconds(NetClock.NowNanoseconds());
+  let budget: int32 = earliest.PollMilliseconds(Instant.Now().ToDurationSinceEpochish().ToNanoseconds());
   if budget >= 0 && (timeout < 0 || budget < timeout) {
     timeout = budget;
   }
@@ -457,7 +456,7 @@ pub method(NetEventLoop) Poll(maximum_wait_ms: int32) -> Result<int32, NetError>
   var error: NetNativeError = NetNativeError{};
   let rows: *mut NetNativeWait = self.scratch.Data() as *mut NetNativeWait;
   if net_core_os_wait_many(rows, count, timeout, &mut error) != 0 {
-    return NetMapNativeError(error);
+    return (error).AsProduct();
   }
 
   var completed: FastArray<NetOperationCompletion> = FastArray<NetOperationCompletion>.New();
@@ -466,9 +465,9 @@ pub method(NetEventLoop) Poll(maximum_wait_ms: int32) -> Result<int32, NetError>
     i = i - 1;
     var entry: NetPendingOperation = self.pending.Get(i);
     var row: NetNativeWait = self.scratch.Get(i);
-    var failure: NetError? = net_operation_control_error(entry, NetClock.NowNanoseconds());
+    var failure: NetError? = (entry).ControlError(Instant.Now().ToDurationSinceEpochish().ToNanoseconds());
     if failure == nil && entry.kind == NetOperationKind.ResolverReady {
-      let state: NetReadinessState = entry.resolver_probe(NetClock.NowNanoseconds());
+      let state: NetReadinessState = entry.resolver_probe(Instant.Now().ToDurationSinceEpochish().ToNanoseconds());
       if !state.closed {
         if state.ready {
           row.ready = 1;
@@ -477,7 +476,7 @@ pub method(NetEventLoop) Poll(maximum_wait_ms: int32) -> Result<int32, NetError>
     }
 
     if failure == nil && row.ready != 0 && row.kind != 0 {
-      failure = NetMapNativeError(NetNativeError{kind: row.kind, native_code: row.native_code});
+      failure = (NetNativeError{kind: row.kind, native_code: row.native_code}).AsProduct();
     }
 
     var step: NetOperationStep = NetOperationStep{};
@@ -487,9 +486,9 @@ pub method(NetEventLoop) Poll(maximum_wait_ms: int32) -> Result<int32, NetError>
       if entry.kind == NetOperationKind.Readiness || entry.kind == NetOperationKind.ResolverReady {
         step.complete = true;
       } else if entry.kind == NetOperationKind.TcpDial || entry.kind == NetOperationKind.TcpAccept {
-        step = net_step_connection(entry);
+        step = (entry).StepConnection();
       } else {
-        step = net_step_transfer(entry);
+        step = (entry).StepTransfer();
       }
     }
 
@@ -498,8 +497,8 @@ pub method(NetEventLoop) Poll(maximum_wait_ms: int32) -> Result<int32, NetError>
         completed = FastArray<NetOperationCompletion>.NewWithCapacity(count);
       }
 
-      completed.Push(net_operation_completion(entry, step.error, step.eof));
-      net_operation_remove(self, i, step.keep_handle);
+      completed.Push((entry).Completion(step.error, step.eof));
+      self.Retire(i, step.keep_handle);
     } else {
       self.pending.Set(i, entry);
     }
@@ -511,7 +510,7 @@ pub method(NetEventLoop) Poll(maximum_wait_ms: int32) -> Result<int32, NetError>
   i = 0;
   while i < published {
     var completion: NetOperationCompletion = completed.Get(i);
-    net_publish_completion(completion);
+    (completion).Publish();
     i = i + 1;
   }
 
@@ -529,7 +528,7 @@ pub method(TcpConnection) WhenReadable(
   driver: ref mut NetEventLoop,
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<Result<Unit, NetError>>, NetError> {
-  return net_register_readiness(driver, self.socket_value, false, options);
+  return (driver).RegisterReadiness(self.socket_value, false, options);
 }
 
 /**
@@ -542,7 +541,7 @@ pub method(TcpConnection) WhenWritable(
   driver: ref mut NetEventLoop,
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<Result<Unit, NetError>>, NetError> {
-  return net_register_readiness(driver, self.socket_value, true, options);
+  return (driver).RegisterReadiness(self.socket_value, true, options);
 }
 
 /**
@@ -555,7 +554,7 @@ pub method(TcpListener) WhenAcceptable(
   driver: ref mut NetEventLoop,
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<Result<Unit, NetError>>, NetError> {
-  return net_register_readiness(driver, self.socket_value, false, options);
+  return (driver).RegisterReadiness(self.socket_value, false, options);
 }
 
 /**
@@ -567,7 +566,7 @@ pub method(UdpSocket) WhenReadable(
   driver: ref mut NetEventLoop,
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<Result<Unit, NetError>>, NetError> {
-  return net_register_readiness(driver, self.socket_value, false, options);
+  return (driver).RegisterReadiness(self.socket_value, false, options);
 }
 
 /**
@@ -580,7 +579,7 @@ pub method(UdpSocket) WhenWritable(
   driver: ref mut NetEventLoop,
   options: ref NetOperationOptions
 ) -> Result<AsyncFuture<Result<Unit, NetError>>, NetError> {
-  return net_register_readiness(driver, self.socket_value, true, options);
+  return (driver).RegisterReadiness(self.socket_value, true, options);
 }
 
 /**
@@ -589,28 +588,27 @@ pub method(UdpSocket) WhenWritable(
  * @note The closure retains the producer until retirement. The loop owns only a
  *   duplicate wake descriptor; the producer retains its original descriptor.
  */
-pub func NetRegisterResolverReady(
-  driver: ref mut NetEventLoop,
+pub method(NetEventLoop) RegisterResolverReady(
   wake_handle: intptr,
   options: ref NetOperationOptions,
   probe: (uint64) -> NetReadinessState
 ) -> Result<AsyncFuture<Result<Unit, NetError>>, NetError> {
-  if !driver.live {
+  if !self.live {
     return NetError{kind: NetErrorKind.Closed};
   }
 
-  if driver.pending.Len() >= driver.limit {
+  if self.pending.Len() >= self.limit {
     return NetError{kind: NetErrorKind.WouldBlock};
   }
 
-  let checked: Result<Unit, NetError> = NetCheckOperation(options);
+  let checked: Result<Unit, NetError> = (options).CheckNow();
   if checked.IsErr() {
     return (checked.get_if<NetError>()) as NetError;
   }
 
   var i: int32 = 0;
-  while i < driver.pending.Len() {
-    let entry: NetPendingOperation = driver.pending.Get(i);
+  while i < self.pending.Len() {
+    let entry: NetPendingOperation = self.pending.Get(i);
     if entry.kind == NetOperationKind.ResolverReady && entry.socket_key == wake_handle {
       return NetError{kind: NetErrorKind.WouldBlock};
     }
@@ -618,15 +616,15 @@ pub func NetRegisterResolverReady(
     i = i + 1;
   }
 
-  var handle: intptr = 0 as intptr;
+  var handle: intptr = 0;
   var error: NetNativeError = NetNativeError{};
   if net_core_os_duplicate(wake_handle, &mut handle, &mut error) != 0 {
-    return NetMapNativeError(error);
+    return (error).AsProduct();
   }
 
   let promise: AsyncPromise<Result<Unit, NetError>> = AsyncPromise<Result<Unit, NetError>>.New();
   let future: AsyncFuture<Result<Unit, NetError>> = promise.FutureHandle();
-  driver.pending.Push(NetPendingOperation{
+  self.pending.Push(NetPendingOperation{
     handle: handle, socket_key: wake_handle, options: options, kind: NetOperationKind.ResolverReady,
     attempted: true, promise: promise, resolver_probe: probe
   });
@@ -638,6 +636,6 @@ pub func NetRegisterResolverReady(
  * @brief Query loop liveness without exposing its pending-operation layout.
  * @returns True while registrations may be admitted; false after Close or on a default owner.
  */
-pub func NetLoopIsOpen(driver: ref NetEventLoop) -> bool {
-  return driver.live;
+pub method(NetEventLoop) IsOpen() -> bool {
+  return self.live;
 }
