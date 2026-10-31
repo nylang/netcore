@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "version": "0.2.0",
+  "sdk": {
+    "version": "1.0.5",
+    "hosts": {}
+  }
+}

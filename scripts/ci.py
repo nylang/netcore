@@ -19,13 +19,12 @@ import tarfile
 import urllib.request
 import zipfile
 
+from sdk_layout import sdk_package
 PACKAGE = Path(__file__).resolve().parents[1]
-SDK_VERSION = "1.0.0"
-SDK_PINS = {
-    "darwin-arm64": ("5a9c196d0fae8e0050225ec9f12e8a7be5f2a947d91c065aaa59f64932ca47c9", "7b83f8b49a52fa6493ae0acae2035437061bd74070d6be0b23da0b18855a37fe"),
-    "linux-x86_64": ("11e2b156653edf67ea3509a96efa792e77137e91d3b730d82785cb69f498df07", "fc3fec4817c9473bfef7f3208cf40b0da9a997b650a2a17be3d7647b51a67974"),
-    "windows-x86_64": ("2c70fefa682fe797c9bea0e84ea4089b9ab8835521d7e4bcca89bf06b8b7c4c1", "7c3a8f4881d0555b8a12e49ac8b1085ded616a82f8304399ee161237cfdf1f6e"),
-}
+SDK_LOCK = json.loads((PACKAGE / "release.lock.json").read_text())["sdk"]
+SDK_VERSION = SDK_LOCK["version"]
+SDK_PINS = {host: (row["archive_sha256"], row["manifest_sha256"])
+            for host, row in SDK_LOCK["hosts"].items()}
 
 
 def digest(path: Path) -> str:
@@ -44,6 +43,8 @@ def sdk_path(root: Path, relative: str) -> Path:
 
 
 def obtain_sdk(output: Path, host: str, supplied: Path | None) -> Path:
+    if host not in SDK_PINS:
+        raise ValueError("qualified SDK " + SDK_VERSION + " pins are pending for " + host)
     archive_hash, manifest_hash = SDK_PINS[host]
     name = f"nyra-sdk-{SDK_VERSION}-{host}"
     if supplied:
@@ -140,13 +141,10 @@ def main() -> int:
             subprocess.run(command, cwd=project, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=1200)
         print("END CI step " + str(index), flush=True)
     try:
+        run([sys.executable, str(PACKAGE / "tests/tools/test_sdk_layout.py")])
         if args.mode == "desktop":
             arch = {"aarch64": "arm64", "amd64": "x86_64"}.get(platform.machine().lower(), platform.machine().lower())
             host = platform.system().lower() + "-" + arch
-            if host not in SDK_PINS:
-                raise ValueError("no pinned public SDK for " + host)
-            if host.startswith("darwin-") and int(platform.mac_ver()[0].split(".")[0]) < 27:
-                raise ValueError("SDK 1.0.0 nyrac requires macOS 27; use native CI or a compatible Mac for Nyra tests")
             sdk = obtain_sdk(output, host, args.sdk)
             metadata = json.loads((sdk / "manifest.json").read_text(encoding="utf-8"))
             compiler = sdk_path(sdk, metadata["tools"]["nyrac"]["path"])
@@ -160,7 +158,7 @@ def main() -> int:
             environment["NYRA_KERNEL_ROOT"] = str(output / "source-fallback-disabled")
             if host.startswith("darwin-"):
                 environment["SDKROOT"] = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
-            stdlib = sdk / "targets" / host / "stdlib"
+            stdlib = sdk_package(sdk, host, 'stdlib')
             stage_manifest(project, stdlib, version)
             report["sdk"] = {"version": SDK_VERSION, "manifest_sha256": digest(sdk / "manifest.json"), "source_fallback_disabled": True}
             run([sys.executable, str(project / "scripts/accept.py"), "--compiler", str(compiler),
